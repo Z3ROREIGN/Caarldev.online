@@ -1,0 +1,8 @@
+{
+  "name": "vaultpay-webhook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Recebe webhooks do PagVault/VaultPay e entrega os eventos ao bot do Discord",
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test" }
+}
