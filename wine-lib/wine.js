@@ -1,0 +1,21 @@
+'use strict';
+const crypto = require('crypto');
+const NODE_ID_RE = /^[a-zA-Z0-9_-]{3,64}$/;
+const FROM_NODE = new Set(['hello','stats','ok','err','data','pong','bye']);
+const FROM_BOT = new Set(['challenge','welcome','kick','bye_ack','ping','put','commit','get','del']);
+const BOT_Q_MAX = 500, NODE_Q_MAX = 200, DEFAULT_MAX_WAIT = 8;
+const str = (v,n) => String(v == null ? '' : v).slice(0,n);
+const int = (v,d) => Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d;
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const queryOf = req => new URL(req.url,'http://x').searchParams;
+const send = (res,status,obj) => { res.statusCode=status; res.setHeader('Content-Type','application/json; charset=utf-8'); res.setHeader('Cache-Control','no-store'); res.end(JSON.stringify(obj)); };
+function config(){const e=process.env;return {redisUrl:e.KV_REST_API_URL||e.UPSTASH_REDIS_REST_URL||'',redisToken:e.KV_REST_API_TOKEN||e.UPSTASH_REDIS_REST_TOKEN||'',botToken:e.WINE_BOT_TOKEN||'',nodeToken:e.WINE_NODE_TOKEN||'',maxWait:clamp(int(e.WINE_MAX_WAIT_S,DEFAULT_MAX_WAIT),0,25),nodeTtl:clamp(int(e.WINE_NODE_TTL_S,90),30,600),maxMsg:clamp(int(e.WINE_MAX_MSG,800000),1024,2000000),prefix:str(e.WINE_PREFIX||'wine',40)}}
+const K=(c,...p)=>[c.prefix,...p].join(':');
+async function redis(c,cmd){if(!c.redisUrl||!c.redisToken)throw Object.assign(new Error('redis_missing'),{status:503});const r=await fetch(c.redisUrl.replace(/\/$/,''),{method:'POST',headers:{Authorization:'Bearer '+c.redisToken,'Content-Type':'application/json'},body:JSON.stringify(cmd)});if(!r.ok)throw Object.assign(new Error('redis_error'),{status:502});const j=await r.json();if(j.error)throw Object.assign(new Error(j.error),{status:502});return j.result}
+async function pipe(c,cmds){if(!cmds.length)return [];const r=await fetch(c.redisUrl.replace(/\/$/,'')+'/pipeline',{method:'POST',headers:{Authorization:'Bearer '+c.redisToken,'Content-Type':'application/json'},body:JSON.stringify(cmds)});if(!r.ok)throw Object.assign(new Error('redis_error'),{status:502});const j=await r.json();return j.map(x=>{if(x.error)throw Object.assign(new Error(x.error),{status:502});return x.result})}
+const readJson=async req=>{if(req.body&&typeof req.body==='object')return req.body;let s='';for await(const c of req)s+=c;if(s.length>2500000)throw Object.assign(new Error('msg_too_large'),{status:413});try{return s?JSON.parse(s):{}}catch(e){throw Object.assign(new Error('bad_json'),{status:400})}};
+const flags=async c=>({burst:(await redis(c,['GET',K(c,'burst')]))==='1',bot:(await redis(c,['GET',K(c,'botseen')]))==='1'});
+function cleanMsgs(c,msgs,allowed){if(!Array.isArray(msgs))return {error:'bad_msgs',status:400};if(msgs.length>50)return {error:'too_many_msgs',status:400,max:50};const out=[];for(const m of msgs){if(!m||!m.h||typeof m.h!=='object'||!allowed.has(String(m.h.t||'')))return {error:'bad_frame',status:400};const p=String(m.p||'');if(p.length>c.maxMsg)return {error:'msg_too_large',status:413,max:c.maxMsg};out.push({h:m.h,p})}return {msgs:out}}
+async function popMany(c,key,wait,max,bytes){const end=Date.now()+clamp(wait,0,c.maxWait)*1000;const out=[];let size=0;while(out.length<max&&Date.now()<=end){const raw=await redis(c,['LPOP',key]);if(!raw){if(Date.now()>=end)break;await new Promise(r=>setTimeout(r,200));continue}let m;try{m=JSON.parse(raw)}catch(e){continue}const n=JSON.stringify(m).length;if(out.length&&size+n>bytes)break;out.push(m);size+=n}return out}
+function handler(opts,fn){return async(req,res)=>{try{const c=config();if(!c.redisUrl||!c.redisToken)return send(res,503,{error:'redis_missing'});const method=opts.method||'GET';if(req.method!==method)return send(res,405,{error:'method_not_allowed'});let ctx={};if(opts.who){const h=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');const token=opts.who==='bot'?c.botToken:c.nodeToken;if(!token||h!==token)return send(res,401,{error:'unauthorized'});if(opts.who==='node'){const id=String(req.headers['x-node-id']||'');if(!NODE_ID_RE.test(id))return send(res,400,{error:'bad_node_id'});ctx.id=id}}return await fn(req,res,c,ctx)}catch(e){return send(res,e.status||500,{error:e.message||'internal_error'})}}}
+module.exports={NODE_ID_RE,FROM_NODE,FROM_BOT,BOT_Q_MAX,NODE_Q_MAX,str,int,clamp,queryOf,send,config,K,redis,pipe,readJson,flags,cleanMsgs,popMany,handler};
