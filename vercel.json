@@ -1,1 +1,8 @@
-{"cleanUrls":true,"trailingSlash":false}
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "functions": {
+    "api/wine/down.js": { "maxDuration": 30 },
+    "api/wine/pull.js": { "maxDuration": 30 }
+  }
+}
