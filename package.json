@@ -1,8 +1,13 @@
 {
-  "name": "vaultpay-webhook",
+  "name": "caarldev-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Recebe webhooks do PagVault/VaultPay e entrega os eventos ao bot do Discord",
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node --test" }
+  "description": "Loja Caarldev (Discord, Roblox, Outros), portfólio 3D, painel admin, pagamento PIX automático (MisticPay) e relay Wine",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test --test-force-exit",
+    "dev": "node teste/server.js"
+  }
 }

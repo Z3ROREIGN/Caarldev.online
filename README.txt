@@ -5,7 +5,7 @@ Como usar: dê dois cliques em index.html (precisa de internet só para carregar
 Arquivos:
 - index.html  -> conteúdo
 - style.css   -> visual
-- script.js   -> formulário e ano do rodapé
+- app.js      -> loja, portfólio e painel admin (front-end)
 - assets/fundo.gif -> GIF do fundo
 
 Como colocar seus trabalhos na seção "Trabalhos":

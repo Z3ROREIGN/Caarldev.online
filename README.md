@@ -1,23 +1,22 @@
-# VaultPay → Discord (site no Vercel)
+# Caarldev: loja + portfólio (Vercel)
 
-Recebe os webhooks do PagVault/VaultPay, confere a assinatura (HMAC-SHA256) e guarda os eventos para o bot do Discord buscar.
+Site estático (`index.html`, `app.js`) com API em funções do Vercel. Pagamento por **PIX automático via MisticPay** (https://docs.misticpay.com). Guia completo de instalação e uso em **LOJA.md**; relay Wine em **LEIA-ME.md**.
 
 ## Rotas
-- `POST /api/webhook` — o PagVault envia aqui. Assinatura inválida → 401 (nada é guardado, só o motivo fica no diagnóstico).
-- `GET /api/events?after=N` — só o bot (`Authorization: Bearer INBOX_SECRET`).
+- `GET|POST /api/store?r=<rota>`: API da loja (contas, produtos, pedidos, painel admin).
+- `POST /api/webhook`: a MisticPay avisa aqui (depósito, reembolso, MED). O corpo do aviso **não é confiado**: o site consulta a MisticPay com a sua chave e só libera se a cobrança estiver `COMPLETO` e o valor cobrir o pedido. Aviso de pedido desconhecido ou de saque é ignorado com 200; falha ao processar devolve 500 (a MisticPay tenta de novo).
+- `/api/wine/*`: relay entre o bot e os PCs.
 
-## Instalar (GitHub + Vercel)
-1. Crie um repositório no GitHub e envie **o conteúdo desta pasta** (`api/`, `lib/`, `package.json`...) na raiz do repositório.
-2. No Vercel: *Add New → Project* e importe o repositório (sem framework, sem build).
-3. No projeto do Vercel, conecte um banco **Redis (Upstash)** pela aba *Storage*/*Marketplace*. Ele cria as variáveis `KV_REST_API_URL` e `KV_REST_API_TOKEN` (ou `UPSTASH_REDIS_REST_*`); o código aceita as duas.
-4. Em *Settings → Environment Variables*, crie `INBOX_SECRET` com uma senha longa e aleatória (40+ caracteres). A mesma senha vai no bot.
-5. Faça *Redeploy*. Seu endereço será algo como `https://seu-projeto.vercel.app` (esse é o `INBOX_URL` do bot).
-6. No Discord, como administrador: `/assinatura webhook` → copie o segredo mostrado → crie `WEBHOOK_SECRET` no Vercel → *Redeploy* → `/assinatura webhook_teste` → `/assinatura diagnostico`.
+## Variáveis de ambiente (Vercel)
+| Variável | Para quê |
+|---|---|
+| `MISTICPAY_CLIENT_ID`, `MISTICPAY_CLIENT_SECRET` | Chave de acesso da MisticPay (`pk_`/`sk_`) com escopos `TRANSACTION_CREATE` e `TRANSACTION_READ` |
+| `ADMIN_EMAIL`, `SESSION_SECRET` | Admin e assinatura do login |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Redis (Upstash) |
+| `SITE_URL` (opcional) | Endereço público, se o domínio do webhook sair errado |
+| `WINE_BOT_TOKEN`, `WINE_NODE_TOKEN` | Relay Wine |
 
-## Segurança
-- A assinatura é conferida com os bytes originais do corpo e comparação em tempo constante; sem `WEBHOOK_SECRET`, timestamp ou assinatura válidos, o evento é rejeitado.
-- Eventos repetidos (reenvio do PagVault) são ignorados.
-- Os eventos têm dados de compradores: não compartilhe o `INBOX_SECRET`.
+O endereço do webhook é enviado a cada cobrança (`projectWebhook`), então não precisa cadastrar nada no painel da MisticPay.
 
 ## Testes
-`node --test` (Node 18+; não usa rede).
+`npm test` (Node 18+; não usa rede, a MisticPay é simulada em `teste/mp-mock.js`). `npm run dev` abre a loja local com banco falso e PIX simulado que “paga” sozinho depois de 20 s.
