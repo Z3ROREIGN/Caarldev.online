@@ -21,7 +21,15 @@ function makeStore(){
  LTRIM:(k,a,b)=>{const e=list(k);if(!e)return 'OK';const n=e.v.length;let s=Number(a),t=Number(b);if(s<0)s=Math.max(0,n+s);if(t<0)t=n+t;e.v=e.v.slice(s,t+1);return 'OK'},
  SADD:(k,...vs)=>{let e=live(k);if(!e){e={type:'set',v:new Set(),exp:0};data.set(k,e)}let n=0;for(const v of vs)if(!e.v.has(String(v))){e.v.add(String(v));n++}return n},
  SREM:(k,...vs)=>{const e=live(k);if(!e)return 0;let n=0;for(const v of vs)if(e.v.delete(String(v)))n++;return n},
- SMEMBERS:k=>{const e=live(k);return e?[...e.v]:[]}
+ SMEMBERS:k=>{const e=live(k);return e?[...e.v]:[]},
+ TYPE:k=>{const e=live(k);return e?(e.type==='str'?'string':e.type):'none'},
+ LSET:(k,i,v)=>{const e=list(k);if(!e||i>=e.v.length)throw new Error('ERR index out of range');e.v[Number(i)]=String(v);return 'OK'},
+ HSET:(k,...fv)=>{let e=live(k);if(!e){e={type:'hash',v:new Map(),exp:0};data.set(k,e)}let n=0;for(let i=0;i<fv.length;i+=2){if(!e.v.has(String(fv[i])))n++;e.v.set(String(fv[i]),String(fv[i+1]))}return n},
+ HGET:(k,f)=>{const e=live(k);return e&&e.v.has(String(f))?e.v.get(String(f)):null},
+ HDEL:(k,...fs)=>{const e=live(k);if(!e)return 0;let n=0;for(const f of fs)if(e.v.delete(String(f)))n++;return n},
+ HLEN:k=>{const e=live(k);return e?e.v.size:0},
+ HGETALL:k=>{const e=live(k);return e?[...e.v].flat():[]},
+ SCAN:(cur,...o)=>{let pat='*';for(let i=0;i<o.length;i++)if(String(o[i]).toUpperCase()==='MATCH')pat=o[i+1];const re=new RegExp('^'+String(pat).replace(/[.+^${}()|\\[\]]/g,'\\$&').replace(/\*/g,'.*')+'$');return ['0',[...data.keys()].filter(k=>live(k)&&re.test(k))]}
  };
  const run=cmd=>{const f=cmds[String(cmd[0]).toUpperCase()];if(!f)throw new Error('ERR unknown command '+cmd[0]);return f(...cmd.slice(1))};
  return {run,data};

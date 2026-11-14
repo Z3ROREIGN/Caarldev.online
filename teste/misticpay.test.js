@@ -36,7 +36,7 @@ const owner = new Map();
 const buy = async (extra = {}) => {
   const who = 'cli' + Math.floor(seq++ / 6);
   if (!cookie[who]) await call(who, 'POST', 'register', { name: 'Maria Cliente', email: `${who}@teste.com`, password: 'senha-forte-2' });
-  const r = await call(who, 'POST', 'order', { productId: prod.id, qty: 1, cpf: CPF, ...extra });
+  const r = await call(who, 'POST', 'order', { terms: true, productId: prod.id, qty: 1, cpf: CPF, ...extra });
   if (r.body && r.body.order) owner.set(r.body.order.id, who);
   return r;
 };
@@ -93,7 +93,7 @@ test('webhook falso (diz COMPLETO, mas a MisticPay diz PENDENTE) NÃO libera nad
   assert.strictEqual(r.body.status, 'pendente');
   const n = await getOrder(o.id);
   assert.strictEqual(n.status, 'pendente');
-  assert.strictEqual(n.delivery, null);
+  assert.strictEqual(n.lines[0].delivered, null);
 });
 
 test('webhook real libera e entrega uma vez só, mesmo repetido e em paralelo', async () => {
@@ -107,7 +107,7 @@ test('webhook real libera e entrega uma vez só, mesmo repetido e em paralelo', 
   await send({ transactionId: o.id, status: 'COMPLETO' });                 // reenvio depois
   const n = await getOrder(o.id);
   assert.strictEqual(n.status, 'entregue');
-  assert.strictEqual(n.delivery.items.length, 1);
+  assert.strictEqual(n.lines[0].delivered.items.length, 1);
   assert.strictEqual((await S.getJ(S.K.prod(prod.id))).sold, sold0 + 1);
   const hist = (await S.getOrder(o.id)).history.filter((h) => /Pagamento confirmado/.test(h.what));
   assert.strictEqual(hist.length, 1);
@@ -119,7 +119,7 @@ test('se o webhook atrasar, abrir o pedido já confirma o pagamento', async () =
   await unthrottle(o);
   const n = await getOrder(o.id);
   assert.strictEqual(n.status, 'entregue');
-  assert.strictEqual(n.delivery.items.length, 1);
+  assert.strictEqual(n.lines[0].delivered.items.length, 1);
 });
 
 test('valor pago menor que o pedido fica para o admin, sem liberar', async () => {
@@ -140,7 +140,7 @@ test('pagamento depois de expirar reabre o pedido e entrega', async () => {
   pay(o);
   const r = await send({ transactionId: o.id, status: 'COMPLETO' });
   assert.strictEqual(r.body.status, 'entregue');
-  assert.strictEqual((await getOrder(o.id)).delivery.items.length, 1);
+  assert.strictEqual((await getOrder(o.id)).lines[0].delivered.items.length, 1);
 });
 
 test('pagamento depois de cancelar não entrega: avisa o admin', async () => {

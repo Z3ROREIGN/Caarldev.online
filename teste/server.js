@@ -5,14 +5,14 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const fake = require('./fake-redis');
 const root = path.join(__dirname, '..');
 const hdrs = (require('../vercel.json').headers || [])[0]; // mesmos cabeçalhos de segurança do Vercel
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.gif': 'image/gif', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.gif': 'image/gif', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.webm': 'video/webm', '.mp4': 'video/mp4' };
 (async () => {
   await fake.start(6399, 'dev');
   Object.assign(process.env, { KV_REST_API_URL: 'http://127.0.0.1:6399', KV_REST_API_TOKEN: 'dev', SESSION_SECRET: process.env.SESSION_SECRET || 'segredo-local-de-desenvolvimento', ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'dono@teste.com' });
   // PIX simulado: sem credencial real, a cobrança “paga” sozinha depois de 20 s (a página do pedido confirma sozinha).
   Object.assign(process.env, { MISTICPAY_CLIENT_ID: process.env.MISTICPAY_CLIENT_ID || 'pk_dev', MISTICPAY_CLIENT_SECRET: process.env.MISTICPAY_CLIENT_SECRET || 'sk_dev' });
   require('./mp-mock').install({ autoPayMs: 20000 });
-  const store = require('../api/store.js');
+  const store = require('../api/store.js'), seo = require('../api/seo.js');
   http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     if (hdrs) hdrs.headers.forEach((h) => res.setHeader(h.key, h.value));
@@ -20,6 +20,12 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
       let raw = ''; req.on('data', (c) => { raw += c; });
       req.on('end', () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } req.headers['x-forwarded-proto'] = 'http'; store(req, res); });
       return;
+    }
+    // mesmas rotas de busca/prévia do vercel.json (rewrites)
+    const m = /^\/(p|s)\/([\w-]+)$/.exec(u.pathname);
+    if (m || u.pathname === '/sitemap.xml' || u.pathname === '/robots.txt') {
+      req.url = m ? `/api/seo?t=${m[1]}&${m[1] === 'p' ? 'id' : 'sec'}=${m[2]}` : `/api/seo?t=${u.pathname === '/robots.txt' ? 'robots' : 'sitemap'}`;
+      return seo(req, res);
     }
     let f = path.join(root, u.pathname === '/' ? 'index.html' : decodeURIComponent(u.pathname));
     if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.statusCode = 404; return res.end('404'); }

@@ -16,7 +16,7 @@ test.before(async () => {
     return new Promise((resolve) => {
       const res = { statusCode: 200, h: {}, setHeader(k, v) { this.h[k.toLowerCase()] = v; }, end(t) {
         if (this.h['set-cookie']) cookie[who] = this.h['set-cookie'].split(';')[0];
-        let j; try { j = JSON.parse(t); } catch (_) { j = t; } resolve({ status: this.statusCode, body: j });
+        let j; try { j = JSON.parse(t); } catch (_) { j = t; } resolve({ status: this.statusCode, body: j, h: this.h });
       } };
       handler(req, res);
     });
@@ -63,38 +63,45 @@ test('fluxo completo: admin, produto, estoque, compra, pagamento, banimento', as
   assert.strictEqual(chk.body.total, 2700);
 
   // compra: reserva o estoque e NÃO mostra o item antes de pagar
-  const ord = (await call('cli', 'POST', 'order', { cpf: CPF, productId: p.id, qty: 2, coupon: 'promo10' })).body.order;
+  const ord = (await call('cli', 'POST', 'order', { terms: true, cpf: CPF, productId: p.id, qty: 2, coupon: 'promo10' })).body.order;
   assert.strictEqual(ord.status, 'pendente');
   assert.strictEqual(ord.total, 2700);
-  assert.strictEqual(ord.delivery, null);
+  assert.strictEqual(ord.lines[0].delivered, null);
   assert.strictEqual(JSON.stringify(ord).includes('senha1'), false);
   pub = (await call('anon', 'GET', 'products', null, '&section=discord')).body.products;
   assert.strictEqual(pub[0].stock.count, 1);
-  assert.strictEqual((await call('cli', 'POST', 'order', { cpf: CPF, productId: p.id, qty: 2 })).status, 409);       // sem estoque
-  assert.strictEqual((await call('cli', 'POST', 'order', { cpf: CPF, productId: p.id, qty: 1, coupon: 'promo10' })).status, 400); // cupom esgotado
+  assert.strictEqual((await call('cli', 'POST', 'order', { terms: true, cpf: CPF, productId: p.id, qty: 2 })).status, 409);       // sem estoque
+  assert.strictEqual((await call('cli', 'POST', 'order', { terms: true, cpf: CPF, productId: p.id, qty: 1, coupon: 'promo10' })).status, 400); // cupom esgotado
 
   // o PIX da MisticPay já vem pronto no pedido (sem CPF nem dados internos); admin ainda pode confirmar na mão
   assert.ok(ord.payment.copyPaste.startsWith('00020101'));
   assert.ok(ord.payment.qr.startsWith('data:image/png;base64,'));
   assert.strictEqual(JSON.stringify(ord).includes(CPF), false);
   assert.strictEqual((await call('cli', 'POST', 'order/claim', { id: ord.id })).status, 404);   // "já paguei" não existe mais
-  assert.strictEqual((await call('cli', 'POST', 'order', { productId: p.id, qty: 1 })).status, 400);  // sem CPF
+  assert.strictEqual((await call('cli', 'POST', 'order', { terms: true, productId: p.id, qty: 1 })).status, 400);  // sem CPF
   const paid = (await call('adm', 'POST', 'admin/order', { id: ord.id, action: 'pay' })).body.order;
   assert.strictEqual(paid.status, 'entregue');
   const mine = (await call('cli', 'GET', 'order', null, '&id=' + ord.id)).body.order;
-  assert.deepStrictEqual(mine.delivery.items, ['user1:senha1', 'user2:senha2']);
+  assert.deepStrictEqual(mine.lines[0].delivered.items, ['user1:senha1', 'user2:senha2']);
   // outro cliente não enxerga pedido alheio
   await call('cli2', 'POST', 'register', { name: 'Outro', email: 'o2@teste.com', password: 'senha-forte-3' });
   assert.strictEqual((await call('cli2', 'GET', 'order', null, '&id=' + ord.id)).status, 404);
 
   // produto por link entrega o link só depois de pago
-  const o2 = (await call('cli', 'POST', 'order', { cpf: CPF, productId: rp.id, qty: 1 })).body.order;
+  const o2 = (await call('cli', 'POST', 'order', { terms: true, cpf: CPF, productId: rp.id, qty: 1 })).body.order;
   assert.strictEqual(JSON.stringify(o2).includes('exemplo.com'), false);
   await call('adm', 'POST', 'admin/order', { id: o2.id, action: 'pay' });
-  assert.strictEqual((await call('cli', 'GET', 'order', null, '&id=' + o2.id)).body.order.delivery.url, 'https://exemplo.com/mapa.rbxl');
+  // o link real nunca vai no JSON do pedido: só a rota de download (que confere o dono) redireciona
+  const ol = (await call('cli', 'GET', 'order', null, '&id=' + o2.id)).body.order;
+  assert.strictEqual(ol.lines[0].delivered.download, true);
+  assert.strictEqual(JSON.stringify(ol).includes('exemplo.com'), false);
+  const dl = await call('cli', 'GET', 'download', null, '&id=' + o2.id + '&line=0');
+  assert.strictEqual(dl.status, 302);
+  assert.strictEqual(dl.h.location, 'https://exemplo.com/mapa.rbxl');
+  assert.strictEqual((await call('cli2', 'GET', 'download', null, '&id=' + o2.id)).h.location.startsWith('/#/pedido/'), true);   // outro cliente é barrado
 
   // cancelar devolve o estoque
-  const o3 = (await call('cli', 'POST', 'order', { cpf: CPF, productId: p.id, qty: 1 })).body.order;
+  const o3 = (await call('cli', 'POST', 'order', { terms: true, cpf: CPF, productId: p.id, qty: 1 })).body.order;
   assert.strictEqual((await call('anon', 'GET', 'products', null, '&section=discord')).body.products[0].stock.count, 0);
   await call('cli', 'POST', 'order/cancel', { id: o3.id });
   assert.strictEqual((await call('anon', 'GET', 'products', null, '&section=discord')).body.products[0].stock.count, 1);
