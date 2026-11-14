@@ -7,6 +7,9 @@
     },
     "api/wine/pull.js": {
       "maxDuration": 30
+    },
+    "api/store.js": {
+      "maxDuration": 30
     }
   },
   "headers": [
@@ -15,7 +18,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; media-src 'self' https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; media-src 'self' https:; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         },
         {
           "key": "X-Content-Type-Options",
@@ -34,6 +37,33 @@
           "value": "camera=(), microphone=(), geolocation=()"
         }
       ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/seo?t=sitemap"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "/api/seo?t=robots"
+    },
+    {
+      "source": "/p/:id",
+      "destination": "/api/seo?t=p&id=:id"
+    },
+    {
+      "source": "/s/:sec",
+      "destination": "/api/seo?t=s&sec=:sec"
     }
   ]
 }

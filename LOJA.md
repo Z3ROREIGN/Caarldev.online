@@ -73,6 +73,42 @@ npm test         # testes automáticos da loja e do pagamento (MisticPay simulad
 
 `index.html` e `app.js` (site), `store.css` (visual da loja), `api/store.js` (API única, mantém você abaixo do limite de funções do plano gratuito), `api/webhook.js` (aviso da MisticPay), `lib/shop.js`, `lib/auth.js`, `lib/util.js` (regras de negócio), `lib/misticpay.js` (API da MisticPay) e `teste/loja.test.js` + `teste/misticpay.test.js`.
 
+## Novidades da versão 2
+
+**Compra e entrega**
+- **Carrinho** com até 10 produtos diferentes e um único PIX. Cada item é entregue do seu jeito (itens, download ou manual); o pedido vira "Entregue" quando todos foram entregues.
+- **Termos obrigatórios** no checkout (a data do aceite fica no pedido).
+- **Downloads protegidos**: o link do arquivo não aparece no pedido. O botão passa por `/api/store?r=download`, que confere o dono, o prazo e o limite de downloads (Configurações > Downloads). No painel, "Renovar prazo e downloads" libera de novo. Quem baixa ainda consegue ver o destino final; para proteção total, hospede o arquivo em armazenamento privado.
+- **Garantia e reposição**: no produto, "Garantia (dias)". O cliente pede reposição no pedido (marcando os itens com defeito); o pedido cai em Tickets e você aprova (itens novos saem do estoque e aparecem no pedido) ou nega.
+- **Suporte por tickets** (cliente e painel), com ou sem pedido ligado.
+
+**Vitrine**
+- **Avaliações** só de quem comprou, com nota média nos cartões, resposta da loja e moderação (Painel > Avaliações). Melhores avaliações na página inicial.
+- **Favoritos**; se estava esgotado e voltou, aparece "Voltou ao estoque!" em Minha conta (sem e-mail).
+- **Galeria, vídeo (YouTube ou .mp4) e "O que vem incluso"** em cada produto.
+- **Termos de uso, Reembolso e garantia, Privacidade e FAQ**: textos-modelo editáveis em Painel > Páginas. **Revise antes de divulgar.**
+- **Orçamento de serviços 3D** no portfólio (tipo, prazo, faixa de orçamento, referência), com status no painel.
+
+**Painel**
+- **Relatórios** (7/30/90 dias ou mês, comparação com o período anterior, conversão, receita por produto/categoria).
+- **Produtos**: seleção em massa (mostrar/ocultar, destaque, categoria, reajuste de preço, apagar), duplicar, importar estoque de .txt/.csv.
+- **Equipe com permissões**: Usuários > Cargo > Equipe. Só pedidos, tickets, estoque etc. conforme você marcar; pagamento, reembolso, usuários e configurações continuam só do admin.
+- **Cupons**: limite por cliente, só primeira compra, e **afiliados** (comissão sobre vendas pagas e registro de pagamentos).
+- **Filtro por data** nos pedidos; exportar pedidos, usuários e registros em CSV.
+- **Backup e restauração** (Painel > Backup).
+- **Avisos no Discord** (webhook): pedido pago, entrega manual pendente, pedido que precisa de atenção, estoque baixo, tickets, orçamentos.
+
+**Segurança**
+- **Verificação em duas etapas (2FA)** com app autenticador e 8 códigos de recuperação (Minha conta). Ative na conta de admin.
+- **Bloqueio por conta**: 10 erros de senha/código em 15 minutos travam o login daquela conta por 15 minutos, mesmo com ataques de IPs diferentes.
+- **ADMIN_SETUP_KEY** (opcional, recomendado): sem verificação de e-mail, esta chave impede que outra pessoa crie a conta do administrador antes de você. Defina no Vercel e informe ao criar a conta do `ADMIN_EMAIL`.
+
+**Busca e compartilhamento**
+- Páginas `/p/<produto>` e `/s/<parte>` com prévia bonita (Discord, WhatsApp) e dados estruturados; `/sitemap.xml` e `/robots.txt` automáticos. Use o botão "Copiar link do produto" para divulgar.
+- Fundo em vídeo leve (`assets/fundo.webm` e `.mp4`, ~300 KB) no lugar do GIF de 20 MB.
+
+**Não incluído de propósito**: recuperar senha por e-mail, verificação de e-mail e e-mails de compra (precisam de um serviço de e-mail). Enquanto isso, quem esquece a senha fala com o suporte e você gera uma senha temporária em Usuários.
+
 ## Dica de desempenho
 
-`assets/fundo.gif` tem 20 MB e carrega em todas as páginas. Converter para vídeo `.mp4`/`.webm` ou um GIF menor deixa o site muito mais rápido, principalmente no celular.
+O fundo agora é um vídeo de ~300 KB (`assets/fundo.webm`/`.mp4`). O arquivo `fundo.gif` original foi removido do projeto: se quiser trocar o fundo, converta o novo GIF com `ffmpeg -i fundo.gif -c:v libvpx-vp9 -crf 38 -an assets/fundo.webm`.
