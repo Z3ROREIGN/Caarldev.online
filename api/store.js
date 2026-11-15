@@ -151,7 +151,7 @@ R('POST', 'contact', 'public', async (c) => {
 });
 R('GET', 'pages', 'public', async () => resolvePages(await S.getCfg()));
 R('GET', 'reviews', 'public', async (c) => V.list(c.q.pid, c.user));
-R('GET', 'reviews/recent', 'public', async () => ({ reviews: await V.recent(6) }));
+R('GET', 'reviews/recent', 'public', async (c) => ({ reviews: await V.recent(Math.max(1, Math.min(40, parseInt(c.q.n, 10) || 6))) }));
 
 /* ===== Conta e pedidos ===== */
 R('POST', 'account', 'user', async (c) => {
