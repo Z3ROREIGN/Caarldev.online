@@ -7,10 +7,11 @@ const S = require('../lib/shop');
 const V = require('../lib/reviews');
 const T = require('../lib/support');
 const B = require('../lib/backup');
+const W = require('../lib/wallet');
 const TOTP = require('../lib/totp');
 const { resolvePages, DEFAULT_PAGES } = require('../lib/pages');
 const { notify } = require('../lib/notify');
-const { HttpError, fail, str, int, bool, now, cleanEmail, isEmail, csvCell, url: cleanUrl } = require('../lib/util');
+const { HttpError, fail, str, int, bool, now, brl, cleanEmail, isEmail, csvCell, url: cleanUrl } = require('../lib/util');
 
 const routes = {};
 const R = (method, name, level, fn) => { routes[`${method} ${name}`] = { level, fn }; };
@@ -47,6 +48,7 @@ R('GET', 'bootstrap', 'public', async (c) => {
     user: S.publicUser(c.user), banned: c.banned ? { reason: c.banned.banReason || '' } : null,
     config: S.publicCfg(cfg), categories: cats.filter((x) => x.active),
     wishBack: c.user ? await V.wlBack(c.user) : 0,       // favoritos que voltaram ao estoque
+    balance: c.user ? await W.balance(c.user.id) : 0,    // saldo da carteira (centavos)
   };
 });
 R('GET', 'products', 'public', async (c) => {
@@ -89,6 +91,27 @@ function secondFactor(user, code) {
   if (k >= 0) { user.recovery.splice(k, 1); return true; }
   return false;
 }
+// Confirmação para ações com dinheiro ou segurança: senha e, se a conta tem 2FA, o código do app.
+async function confirmIdentity(c) {
+  const u = c.user;
+  await A.limit(`wsec:${u.id}`, 15, 900);
+  if (!(await A.checkPassword(String(c.body.password || ''), u.pw))) fail(403, 'Senha incorreta.');
+  if (u.totp) {
+    const code = String(c.body.code || '').trim();
+    if (!code) fail(400, 'Digite o código do app autenticador.');
+    if (!secondFactor(u, code)) fail(403, 'Código de verificação incorreto.');
+    await S.setJ(S.K.user(u.id), u);                  // grava o passo usado: o mesmo código não vale duas vezes
+  }
+}
+// Valor em reais ("10,50", "10.5" ou 10.5) para centavos. Usado pela API pública.
+const reaisToCents = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.round(v * 100) : 0;
+  let t = String(v == null ? '' : v).trim().replace(/[^\d.,]/g, '');
+  if (!t) return 0;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(t);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
 R('POST', 'login', 'public', async (c) => {
   const email = cleanEmail(c.body.email), pw = String(c.body.password || '');
   await A.limit(`login:${A.ip(c.req)}:${email}`, 14, 600);
@@ -242,6 +265,47 @@ R('POST', 'ticket/close', 'user', async (c) => {
   return { ticket: await T.setStatus(t.id, 'fechado', c.user) };
 });
 
+/* ===== Carteira (cliente) ===== */
+R('GET', 'wallet', 'user', async (c) => W.overview(c.user, int(c.q.page, 0, 0, 1000)));
+R('POST', 'wallet/deposit', 'user', async (c) => { await A.limit(`wdep:${c.user.id}`, 10, 3600); return { deposit: await W.createDeposit(c.user, c.body, { webhookUrl: webhookUrl(c.req) }) }; });
+R('GET', 'wallet/deposit', 'user', async (c) => ({ deposit: await W.getDeposit(c.user, c.q.id) }));
+R('POST', 'wallet/deposit/cancel', 'user', async (c) => ({ deposit: await W.cancelDeposit(c.user, c.body.id) }));
+R('POST', 'wallet/lookup', 'user', async (c) => { await A.limit(`wlk:${c.user.id}`, 30, 3600); const to = await W.lookup(c.user, c.body.to); return { to: { name: to.name, email: to.email } }; });
+R('POST', 'wallet/transfer', 'user', async (c) => {
+  await A.limit(`wtr:${c.user.id}`, 20, 3600);
+  await confirmIdentity(c);
+  return { transfer: await W.transfer(c.user, c.body) };
+});
+R('POST', 'wallet/withdraw', 'user', async (c) => {
+  await A.limit(`wwd:${c.user.id}`, 10, 3600);
+  await confirmIdentity(c);
+  const x = await W.requestWithdraw(c.user, c.body, { webhookUrl: webhookUrl(c.req) });
+  return { withdrawal: W.wdView(x, false), balance: await W.balance(c.user.id) };
+});
+R('GET', 'wallet/export', 'user', async (c) => { const t = await W.ledgerCsv(c.user.id); return csv('extrato-carteira.csv', t.head, t.rows); });
+
+/* ===== Chaves de API (cliente) ===== */
+R('GET', 'account/api', 'user', async (c) => ({ keys: await W.listKeysView(c.user.id), scopes: W.SCOPES }));
+R('POST', 'account/api/create', 'user', async (c) => {
+  if (!(await S.getCfg()).wallet.apiEnabled) fail(503, 'A API está desativada no momento.');
+  await A.limit(`akc:${c.user.id}`, 10, 3600);
+  await confirmIdentity(c);
+  return W.createKey(c.user, c.body);
+});
+R('POST', 'account/api/revoke', 'user', async (c) => ({ keys: await W.revokeKey(c.user.id, c.body.id) }));
+
+/* ===== API pública v1 (Authorization: Bearer cdk_...). Valores em reais; ver LOJA.md ===== */
+const apiRow = (x) => ({ id: x.id, data: new Date(x.at).toISOString(), tipo: x.type, descricao: x.desc, valor: x.amount / 100, taxa: (x.fee || 0) / 100, saldo_apos: x.balance / 100 });
+const apiDep = (d) => ({ id: d.id, valor: d.amount / 100, creditado: d.credited / 100, status: d.status, criado_em: new Date(d.createdAt).toISOString(), expira_em: new Date(d.expiresAt).toISOString(), ...(d.pay ? { pix_copia_e_cola: d.pay.copyPaste, qr_code_base64: d.pay.qr } : {}) });
+R('GET', 'v1/saldo', 'key:leitura', async (c) => { const b = await W.balance(c.user.id); return { saldo: b / 100, saldo_centavos: b, moeda: 'BRL' }; });
+R('GET', 'v1/extrato', 'key:leitura', async (c) => { const pg = int(c.q.pagina, 0, 0, 1000), p = await W.ledgerPage(c.user.id, pg); return { movimentos: p.rows.map(apiRow), proxima_pagina: p.more ? pg + 1 : null }; });
+R('POST', 'v1/recarga', 'key:recarga', async (c) => ({ recarga: apiDep(await W.createDeposit(c.user, { amount: reaisToCents(c.body.valor), cpf: c.body.cpf }, { webhookUrl: webhookUrl(c.req) })) }));
+R('GET', 'v1/recarga', 'key:recarga', async (c) => ({ recarga: apiDep(await W.getDeposit(c.user, c.q.id)) }));
+R('POST', 'v1/transferir', 'key:transferencia', async (c) => {
+  const t = await W.transfer(c.user, { to: c.body.para, amount: reaisToCents(c.body.valor), note: c.body.nota });
+  return { transferencia: { id: t.id, para: t.to.name, valor: t.amount / 100, taxa_envio: t.feeSent / 100, taxa_recebimento: t.feeReceived / 100, total_debitado: t.charged / 100, valor_recebido: t.received / 100, saldo: t.balance / 100 } };
+});
+
 /* ===== Admin e equipe ===== */
 // Níveis: "admin" (só admin) ou "perm:a,b" (admin ou equipe com alguma dessas permissões).
 R('GET', 'admin/status', 'perm:pedidos,tickets,mensagens,estoque,produtos,cupons,portfolio,avaliacoes', async (c) => {
@@ -334,6 +398,8 @@ R('POST', 'admin/user', 'admin', async (c) => {
   else if (a === 'reset2fa') { delete u.totp; delete u.totpLast; delete u.recovery; delete u.totpPending; u.tv = (u.tv || 0) + 1; }
   else if (a === 'delete') {
     if (locked) fail(403, 'Você não pode apagar essa conta.');
+    const bal = await W.balance(u.id);
+    if (bal > 0) fail(409, `Essa conta tem ${brl(bal)} na carteira. Zere o saldo (Painel > Carteiras) antes de apagar.`);
     await r.cmd(['DEL', S.K.user(u.id), S.K.email(u.email)]); await r.cmd(['SREM', S.K.users, u.id]);
     await S.audit(c.user, 'usuario:apagado', u.email); return { ok: true };
   } else fail(400, 'Ação desconhecida.');
@@ -400,6 +466,16 @@ R('POST', 'admin/review', 'perm:avaliacoes', async (c) => {
   return { ok: true };
 });
 
+/* ===== Admin: carteiras ===== */
+R('GET', 'admin/wallet', 'admin', async () => W.adminOverview());
+R('GET', 'admin/wallet/search', 'admin', async (c) => ({ users: await W.adminSearch(str(c.q.q, 60)) }));
+R('GET', 'admin/wallet/user', 'admin', async (c) => W.adminUser(str(c.q.id, 40)));
+R('POST', 'admin/wallet/adjust', 'admin', async (c) => { await confirmIdentity(c); return W.adjust(c.user, c.body); });
+R('POST', 'admin/wallet/withdraw', 'admin', async (c) => {
+  if (['approve', 'sent', 'refund'].includes(c.body.action)) await confirmIdentity(c);
+  return { withdrawal: await W.adminWithdrawAction(c.user, c.body, { webhookUrl: webhookUrl(c.req) }) };
+});
+
 // Backup completo (inclui senhas criptografadas e chaves de 2FA: guarde em lugar seguro). Pede a senha do admin.
 const needPassword = async (c) => {
   await A.limit(`bk:${c.user.id}`, 6, 900);
@@ -434,14 +510,25 @@ module.exports = async (req, res) => {
     const q = Object.fromEntries(u.searchParams);
     const route = routes[`${req.method} ${q.r}`];
     if (!route) return send(route === undefined && ['GET', 'POST'].includes(req.method) ? 404 : 405, { error: 'Rota não encontrada.' });
-    if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'cd') fail(403, 'Requisição não permitida.');
+    const isKey = route.level.startsWith('key:');       // API pública: chave no cabeçalho, sem cookie (por isso não precisa do X-Requested-With)
+    if (!isKey && req.method !== 'GET' && req.headers['x-requested-with'] !== 'cd') fail(403, 'Requisição não permitida.');
     const c = { req, res, q, body: req.method === 'POST' ? readBody(req) : {} };
-    if (route.level !== 'public' || req.headers.cookie) await loadUser(c);
-    if (route.level !== 'public') {
-      if (c.banned) fail(403, `Conta banida.${c.banned.banReason ? ' Motivo: ' + c.banned.banReason : ''}`);
-      needUser(c);
-      if (route.level === 'admin' && c.user.role !== 'admin') fail(403, 'Acesso restrito a administradores.');
-      if (route.level.startsWith('perm:') && !A.canAny(c.user, route.level.slice(5).split(','))) fail(403, 'Você não tem permissão para isso.');
+    if (isKey) {
+      const scope = route.level.slice(4), tok = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+      const k = await W.authKey(tok);
+      if (!k) fail(401, 'Chave de API inválida ou revogada.');
+      if (!k.key.scopes.includes(scope)) fail(403, `Esta chave não tem a permissão "${scope}".`);
+      if (!(await S.getCfg()).wallet.apiEnabled) fail(503, 'A API está desativada no momento.');
+      await A.limit(`api:${k.key.id}`, 60, 60);
+      c.user = k.user; c.apiKey = k.key;
+    } else {
+      if (route.level !== 'public' || req.headers.cookie) await loadUser(c);
+      if (route.level !== 'public') {
+        if (c.banned) fail(403, `Conta banida.${c.banned.banReason ? ' Motivo: ' + c.banned.banReason : ''}`);
+        needUser(c);
+        if (route.level === 'admin' && c.user.role !== 'admin') fail(403, 'Acesso restrito a administradores.');
+        if (route.level.startsWith('perm:') && !A.canAny(c.user, route.level.slice(5).split(','))) fail(403, 'Você não tem permissão para isso.');
+      }
     }
     const out = await route.fn(c);
     if (out && out.redirect) { res.statusCode = 302; res.setHeader('Location', out.redirect); return res.end(); }

@@ -3,6 +3,7 @@
 // A liberação acontece depois que a própria MisticPay confirma (com a nossa chave) que a cobrança
 // está COMPLETA e que o valor cobre o pedido (lib/shop.js → confirmPayment). Repetições são seguras.
 const S = require("../lib/shop");
+const W = require("../lib/wallet");
 
 function readBody(req) {
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
@@ -28,15 +29,35 @@ module.exports = async (req, res) => {
       await S.audit("sistema", "pagamento:med", `${String(t.transactionId || "?").slice(0, 60)} · ${String(i.status || "").slice(0, 20)} · ${String(i.type || "").slice(0, 30)}`);
       const o = t.transactionId ? await S.findOrderByRef(t.transactionId) : null;
       if (o && o.pay) { S.hist(o, "MisticPay", `MED (${String(i.status || "").slice(0, 20)}): confira no painel da MisticPay`); o.payIssue = `Infração MED registrada (${String(i.status || "").slice(0, 20)}). Confira no painel da MisticPay.`; await S.saveOrder(o); }
+      else {                                   // pode ser uma recarga de carteira
+        const d = t.transactionId ? await W.findDepositByRef(t.transactionId) : null;
+        if (d) await W.noteDepositIssue(d, `Infração MED registrada (${String(i.status || "").slice(0, 20)}). Confira no painel da MisticPay e no saldo do cliente.`);
+      }
       return res.status(200).json({ ok: true });
     }
-    if (String(body.transactionType || "DEPOSITO").toUpperCase() !== "DEPOSITO") return res.status(200).json({ ok: true, ignored: true }); // saques não importam para a loja
+    const type = String(body.transactionType || "DEPOSITO").toUpperCase();
+    if (type === "RETIRADA") {                  // resultado de um saque da carteira (COMPLETO, FALHA, DEVOLVIDO): confere na MisticPay e fecha
+      const x = await W.findWithdrawByRef(body.transactionId);
+      if (!x) return res.status(200).json({ ok: true, ignored: true });
+      const after = await W.confirmWithdraw(x);
+      return res.status(200).json({ ok: true, status: after.status });
+    }
+    if (type !== "DEPOSITO") return res.status(200).json({ ok: true, ignored: true });
 
     const o = await S.findOrderByRef(body.transactionId);
-    if (!o || !o.pay) return res.status(200).json({ ok: true, ignored: true });   // não é nosso: responde 2xx para não ficar reenviando
-
     const status = String(body.status || "").toUpperCase();
-    if (body.refund || status === "DEVOLVIDO" || status === "DEVOLVIDO_PARCIAL") {
+    // Reembolso concluído (DEVOLVIDO / DEVOLVIDO_PARCIAL). refund.status RECUSADO = o banco desfez: a transação voltou a COMPLETO.
+    const isRefund = status === "DEVOLVIDO" || status === "DEVOLVIDO_PARCIAL" || (!!body.refund && String(body.refund.status || "").toUpperCase() === "CONCLUIDO");
+    if (!o || !o.pay) {
+      // Recarga de carteira: o id começa com "rc". Mesma regra: confere na MisticPay antes de creditar.
+      const d = await W.findDepositByRef(body.transactionId);
+      if (!d) return res.status(200).json({ ok: true, ignored: true });           // não é nosso: responde 2xx para não ficar reenviando
+      if (isRefund) { await W.noteDepositRefund(d, body); return res.status(200).json({ ok: true }); }
+      const after = await W.confirmDeposit(d);
+      return res.status(200).json({ ok: true, status: after.status });
+    }
+
+    if (isRefund) {
       await S.noteRefund(o, body);
       return res.status(200).json({ ok: true });
     }
