@@ -169,3 +169,10 @@ A API roda dentro de `api/store.js` (rewrite `/api/v1/*` no `vercel.json`), ent�
 ### Segurança da carteira
 
 O saldo é um número inteiro no Redis alterado só com operações atômicas (`INCRBY`/`DECRBY`): pedidos simultâneos nunca gastam mais que o saldo. Recarga só credita depois de a MisticPay confirmar o PIX (o corpo do webhook nunca é confiado) e só uma vez. Transferência, saque e criação de chave pedem a senha e, com 2FA ativo, o código. Há limite de tentativas em tudo, e o backup do painel inclui os saldos.
+
+## Visual (painel)
+- Layout com menu lateral + barra superior (`index.html`, `theme.css`). Para trocar a cor de destaque, edite `--accent` e `--accent-2` no topo de `theme.css`.
+- Página **Vouchs** (`#/vouchs`): avaliações recentes dos clientes.
+- Perfil (`#/conta/perfil`): nível do cliente, estatísticas e emblemas.
+- Verificação em duas etapas: o código só é pedido (login, transferência, saque, chaves de API) para quem a ativou; nenhum aviso aparece para quem não ativou.
+- Campo da chave de administrador no cadastro fica oculto: abra `#/cadastro?admin=1` para vê-lo.

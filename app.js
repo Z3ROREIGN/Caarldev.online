@@ -105,23 +105,54 @@
     S.user = b.user; S.config = b.config; S.cats = b.categories; S.banned = b.banned; S.wishBack = b.wishBack || 0; S.balance = b.balance || 0; S.loaded = true;
   }
   const hasOutros = () => S.cats.some((c) => c.section === 'outros');
+  const IC = {
+    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', discord: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+    roblox: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 12v3M5.5 13.5h3M16 12.5h.01M18.5 14.5h.01"/>',
+    outros: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    portfolio: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-9 9"/>',
+    cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/>',
+    star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+    support: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
+    faq: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>',
+    overview: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+    wallet: '<path d="M4 7a2 2 0 0 1 2-2h12v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><path d="M16 14.5h.01"/>',
+    orders: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>', heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>', key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', panel: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  };
+  const ico = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
+  const nl = (href, icon, label, active, extra) => `<a class="nl${active ? ' on' : ''}" href="${href}"${active ? ' aria-current="page"' : ''}>${ico(icon)}<span>${label}</span>${extra || ''}</a>`;
   function updateChrome(name) {
+    const tab = name === 'conta' ? (parseRoute().parts[1] || 'visao') : '';
     const secs = SECS.filter((s) => s !== 'outros' || hasOutros());
-    const on = (n) => (name === n ? ' class="on" aria-current="page"' : '');
-    const n = cart.count();
-    $('#nav').innerHTML = secs.map((s) => `<a href="#/${s}"${on(s)}>${esc(secName(s))}</a>`).join('') + `<a href="#/portfolio"${on('portfolio')}>Portfólio</a>` +
-      (n || name === 'carrinho' ? `<a href="#/carrinho"${on('carrinho')}>Carrinho${n ? ` <b class="cartn">${n}</b>` : ''}</a>` : '') +
-      (S.user ? `${isStaff() ? `<a class="btn btn-small" href="#/admin">Painel</a>` : ''}<a href="#/suporte"${on('suporte')}>Suporte</a>${(S.config.wallet || {}).enabled === false ? '' : `<a class="walletchip" href="#/conta/carteira" title="Saldo da carteira">${brl(S.balance)}</a>`}<a href="#/conta"${on('conta')}>Minha conta${S.wishBack ? ' <i class="dot" title="Um favorito voltou ao estoque"></i>' : ''}</a><button class="linkbtn" data-act="logout">Sair</button>`
-        : `<a href="#/entrar"${on('entrar')}>Entrar</a><a class="btn btn-small" href="#/cadastro">Criar conta</a>`);
+    const n = cart.count(), walletOn = (S.config.wallet || {}).enabled !== false;
+    let h = '<div class="nav-label">Loja</div>' + nl('#/', 'home', 'Início', name === 'home');
+    secs.forEach((s) => { h += nl(`#/${s}`, s, esc(secName(s)), name === s); });
+    h += nl('#/portfolio', 'portfolio', 'Portfólio', name === 'portfolio') + nl('#/carrinho', 'cart', 'Carrinho', name === 'carrinho', n ? `<span class="pill">${n}</span>` : '');
+    h += '<div class="nav-label">Comunidade</div>' + nl('#/vouchs', 'star', 'Vouchs', name === 'vouchs') + nl('#/suporte', 'support', 'Suporte', name === 'suporte' || name === 'ticket') + nl('#/faq', 'faq', 'Perguntas frequentes', name === 'faq');
+    if (S.user) {
+      h += '<div class="nav-label">Minha conta</div>';
+      ACCT.filter(([id]) => id !== 'api' || WC().apiEnabled !== false).forEach(([id, label, icon]) => {
+        const extra = id === 'carteira' && walletOn ? `<span class="pill">${brl(S.balance)}</span>` : id === 'favoritos' && S.wishBack ? '<i class="dot" title="Um favorito voltou ao estoque"></i>' : '';
+        h += nl(`#/conta${id === 'visao' ? '' : '/' + id}`, icon, label, name === 'conta' && tab === id, extra);
+      });
+      if (isStaff()) h += '<div class="nav-label">Administração</div>' + nl('#/admin', 'panel', 'Painel', name === 'admin');
+    }
+    $('#nav').innerHTML = h;
+    const su = $('#sideuser'); su.className = 'side-user' + (S.user ? '' : ' side-guest');
+    su.innerHTML = S.user ? `<span class="avatar" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span><div class="who"><b>${esc(S.user.name)}</b><small>${esc(S.user.email)}</small></div><a class="iconbtn" href="#/conta/perfil" title="Perfil" aria-label="Perfil">${ico('user')}</a><button class="iconbtn" data-act="logout" title="Sair" aria-label="Sair da conta">${ico('logout')}</button>`
+      : '<a class="btn" href="#/entrar">Entrar</a><a class="btn btn-ghost" href="#/cadastro">Criar conta</a>';
+    $('#topact').innerHTML = (n ? `<a class="chip" href="#/carrinho" aria-label="Carrinho, ${n} ${n === 1 ? 'item' : 'itens'}">${ico('cart', 18)}<span class="cartn">${n}</span></a>` : '') +
+      (S.user && walletOn ? `<a class="chip" href="#/conta/carteira" title="Saldo da carteira">${ico('wallet', 18)}<b>${brl(S.balance)}</b></a>` : '') + (S.user ? '' : '<a class="btn btn-small" href="#/entrar">Entrar</a>');
     const a = S.config.announcement, bn = $('#banner');
     bn.hidden = !a; bn.className = a ? `banner ${esc(a.tone)}` : ''; bn.textContent = a ? a.text : '';
     const c = S.config.contacts || {}, wa = String(c.whatsapp || '').replace(/\D/g, '');
     $('#footer').innerHTML = `<p>© ${new Date().getFullYear()} ${esc(S.config.storeName || 'Caarldev')}. Todos os direitos reservados.</p>
-      <div class="foot-links"><a href="#/termos">Termos de uso</a><a href="#/reembolso">Reembolso e garantia</a><a href="#/privacidade">Privacidade</a><a href="#/faq">Perguntas frequentes</a></div>
+      <div class="foot-links"><a href="#/termos">Termos de uso</a><a href="#/reembolso">Reembolso e garantia</a><a href="#/privacidade">Privacidade</a></div>
       <div class="foot-links">${safeUrl(c.discord) ? `<a href="${esc(c.discord)}" target="_blank" rel="noopener">Discord</a>` : ''}${wa ? `<a href="https://wa.me/${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ''}${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : ''}</div>`;
-    const h = $('#topo').offsetHeight; document.documentElement.style.setProperty('--navh', h + 'px');
+    $('.shell').classList.remove('open');
   }
-  new ResizeObserver(() => document.documentElement.style.setProperty('--navh', $('#topo').offsetHeight + 'px')).observe($('#topo'));
 
   const views = {};
   const parseRoute = () => { const [path, qs] = location.hash.replace(/^#\/?/, '').split('?'); return { parts: path.split('/').filter(Boolean), q: Object.fromEntries(new URLSearchParams(qs || '')) }; };
@@ -152,6 +183,7 @@
     const act = el.dataset.act;
     if (act === 'logout') { await run(el, async () => { await post('logout'); S.user = null; S.wishBack = 0; S.balance = 0; location.hash = '#/'; render(); toast('Você saiu da conta.'); }); }
     if (act === 'copy') copy(el.dataset.copy);
+    if (act === 'menu') $('.shell').classList.toggle('open');
   });
 
   /* ---------- Componentes ---------- */
@@ -187,6 +219,18 @@
           <li><strong>Escolha</strong><span>Abra o produto, defina a quantidade e aplique um cupom, se tiver. Dá para montar um carrinho com vários produtos.</span></li>
           <li><strong>Pague no PIX</strong><span>O pedido reserva o estoque e gera o QR Code na hora. Pague e pronto: a confirmação é automática.</span></li>
           <li><strong>Receba</strong><span>Assim que o pagamento cai, itens e links aparecem no pedido e em Minha conta. Com garantia, se o produto tiver.</span></li></ol></section>`,
+    };
+  };
+
+  /* ---------- Vouchs: avaliações dos clientes ---------- */
+  views.vouchs = async () => {
+    const { reviews } = await api('reviews/recent', { query: { n: 40 } }).catch(() => ({ reviews: [] }));
+    const avg = reviews.length ? reviews.reduce((t, r) => t + r.rating, 0) / reviews.length : 0;
+    return {
+      title: 'Vouchs', html: `<div class="page"><header class="page-head"><h1>Vouchs</h1><p class="lead">Avaliações de clientes que já compraram (4 estrelas ou mais, com comentário).</p></header>
+        ${reviews.length ? `<div class="vouch-sum"><span class="chip"><strong>${reviews.length}</strong><span>vouchs recentes</span></span><span class="chip"><strong>${avg.toFixed(1)}</strong><span class="stars">${stars(avg)}</span></span></div>
+        <div class="vouches">${reviews.map((r) => `<a class="vouch" href="#/produto/${esc(r.pid)}"><span class="avatar" aria-hidden="true">${esc(String(r.name || '?').trim()[0].toUpperCase())}</span><div class="who"><b>${esc(r.name)}</b><small>${esc(r.product)}</small><span class="stars">${stars(r.rating)}</span><p>${esc(r.text)}</p></div><span class="when">${dt(r.at)}</span></a>`).join('')}</div>`
+        : empty('Ainda sem vouchs', 'As avaliações aparecem aqui depois das primeiras compras.', '<a class="btn" href="#/">Ver produtos</a>')}</div>`,
     };
   };
 
@@ -382,7 +426,7 @@
         <form id="auth" class="stack">${reg ? '<label>Nome<input name="name" autocomplete="name" required maxlength="60"></label>' : ''}
           <label>E-mail<input name="email" type="email" autocomplete="email" required></label>
           <label>Senha<input name="password" type="password" autocomplete="${reg ? 'new-password' : 'current-password'}" required minlength="${reg ? 8 : 1}"></label>
-          ${reg ? '<p class="fine">Use pelo menos 8 caracteres.</p><details class="adminkey"><summary>Sou o administrador da loja</summary><label>Chave de configuração<input name="setupKey" type="password" autocomplete="off"></label><p class="fine">Só é pedida se a variável ADMIN_SETUP_KEY estiver definida no Vercel.</p></details>' : '<label id="codef" hidden>Código de verificação<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" placeholder="6 dígitos do app ou código de recuperação"></label>'}
+          ${reg ? '<p class="fine">Use pelo menos 8 caracteres.</p><details class="adminkey"' + (q.admin ? ' open' : ' hidden') + '><summary>Sou o administrador da loja</summary><label>Chave de configuração<input name="setupKey" type="password" autocomplete="off"></label><p class="fine">Só é pedida se a variável ADMIN_SETUP_KEY estiver definida no Vercel.</p></details>' : '<label id="codef" hidden>Código de verificação<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" placeholder="6 dígitos do app ou código de recuperação"></label>'}
           <button class="btn" ${closed ? 'disabled' : ''}>${reg ? 'Criar conta' : 'Entrar'}</button></form>
         <p class="fine">${reg ? `Já tem conta? <a href="#/entrar${next}">Entrar</a>` : `Ainda não tem conta? <a href="#/cadastro${next}">Criar conta</a>. Esqueceu a senha? Fale com o <a href="#/faq">suporte</a>: geramos uma senha temporária.`}</p></div></div>`,
       mount(el) {
@@ -536,15 +580,13 @@
   }
 
   const acctTabs = {};
-  const ACCT = [['visao', 'Visão geral'], ['carteira', 'Carteira'], ['pedidos', 'Pedidos'], ['favoritos', 'Favoritos'], ['seguranca', 'Segurança'], ['api', 'Chaves de API'], ['perfil', 'Perfil']];
+  const ACCT = [['visao', 'Visão geral', 'overview'], ['carteira', 'Carteira', 'wallet'], ['pedidos', 'Pedidos', 'orders'], ['favoritos', 'Favoritos', 'heart'], ['seguranca', 'Segurança', 'shield'], ['api', 'Chaves de API', 'key'], ['perfil', 'Perfil', 'user']];
   views.conta = async ([tab = 'visao'], q) => {
     if (!S.user) return needLogin();
     if (!acctTabs[tab]) tab = 'visao';
-    const nav = ACCT.filter(([id]) => id !== 'api' || WC().apiEnabled !== false)
-      .map(([id, n]) => `<a href="#/conta${id === 'visao' ? '' : '/' + id}" class="${id === tab ? 'on' : ''}"${id === tab ? ' aria-current="page"' : ''}>${n}${id === 'carteira' && WC().enabled !== false ? `<span class="navbal">${brl(S.balance)}</span>` : ''}${id === 'favoritos' && S.wishBack ? '<i class="dot"></i>' : ''}</a>`).join('');
     return {
       title: 'Minha conta',
-      html: `<div class="acct"><aside class="acct-nav" aria-label="Minha conta"><div class="acct-id"><span class="avatar" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span><div><strong>${esc(S.user.name)}</strong><span class="muted">${esc(S.user.email)}</span></div></div>${nav}<button class="linkbtn" data-act="logout">Sair da conta</button></aside><section class="acct-main" id="acct"><p class="muted">Carregando…</p></section></div>`,
+      html: '<div class="acct"><section class="acct-main" id="acct"><div class="skel" aria-busy="true"><i></i><i></i><i></i></div></section></div>',
       mount(el) {
         const body = $('#acct', el), load = () => acctTabs[tab](body, load, q).catch((e) => { body.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`; });
         load();
@@ -560,7 +602,6 @@
     const open = w ? w.deposits.filter((d) => d.status === 'pendente').length : 0;
     el.innerHTML = `${acctHead(`Olá, ${S.user.name.split(' ')[0]}`, 'Seu resumo na loja.')}${walletCard()}
       ${open ? `<p class="notice">Você tem ${pl(open, 'recarga aguardando pagamento', 'recargas aguardando pagamento')}. <a href="#/conta/carteira">Ver recargas</a></p>` : ''}
-      ${S.user.twofa ? '' : '<p class="notice">Sua carteira ainda não tem <b>verificação em duas etapas</b>. Ative em <a href="#/conta/seguranca">Segurança</a> para proteger o saldo.</p>'}
       <div class="cols"><section class="panel"><h3>Últimas movimentações</h3>${w && w.ledger.length ? `<ul class="rows">${w.ledger.slice(0, 5).map((e) => `<li><span>${esc(e.desc)}<br><em>${dt(e.at)}</em></span><b class="${e.amount < 0 ? 'down' : 'up'}">${signed(e.amount)}</b></li>`).join('')}</ul><a class="btn btn-ghost btn-small" href="#/conta/carteira">Ver extrato completo</a>` : '<p class="muted">Ainda não há movimentações na carteira.</p>'}</section>
         <section class="panel"><h3>Pedidos recentes</h3>${orders.length ? `<div class="olist">${orderRows(orders.slice(0, 4))}</div><a class="btn btn-ghost btn-small" href="#/conta/pedidos">Ver todos os pedidos</a>` : '<p class="muted">Quando você comprar, o pedido e a entrega aparecem aqui.</p><a class="btn btn-small" href="#/">Ver produtos</a>'}</section></div>`;
     bindWallet(el);
@@ -594,16 +635,35 @@
     el.innerHTML = `${acctHead('Favoritos', 'Se um favorito estiver esgotado, avisamos aqui quando voltar ao estoque.')}<section class="panel">${favs ? `<div class="olist">${favs}</div>` : '<p class="muted">Favorite um produto para acompanhá-lo aqui.</p>'}</section>`;
     $$('[data-unfav]', el).forEach((b) => { b.onclick = () => run(b, async () => { await post('wishlist/toggle', { pid: b.dataset.unfav, on: false }); await boot(); render(); }); });
   };
+  const TIERS = [[500000, 'Diamante'], [100000, 'Ouro'], [20000, 'Prata'], [1, 'Bronze']];   // total gasto, em centavos
+  const emblem = (icon, title, desc, ok) => `<div class="emb${ok ? '' : ' lock'}" title="${esc(desc)}"><span class="ico">${ico(icon, 26)}</span><b>${esc(title)}</b><small>${esc(desc)}</small></div>`;
   acctTabs.perfil = async (el) => {
-    el.innerHTML = `${acctHead('Perfil')}<section class="panel"><form id="perfil" class="stack"><label>Nome<input name="name" value="${esc(S.user.name)}" required maxlength="60"></label><label>E-mail<input value="${esc(S.user.email)}" disabled></label><p class="fine">O e-mail é o endereço que outras pessoas usam para te enviar saldo. Para trocar, fale com o suporte.</p><div class="actions"><button class="btn">Salvar nome</button></div></form></section>`;
+    const [{ orders }, w, wl] = await Promise.all([api('orders'), api('wallet').catch(() => null), api('wishlist').catch(() => ({ products: [] }))]);
+    const paid = orders.filter((o) => o.status === 'pago' || o.status === 'entregue');
+    const total = paid.reduce((t, o) => t + o.total, 0), big = paid.reduce((m, o) => Math.max(m, o.total), 0);
+    const tier = (TIERS.find(([min]) => total >= min) || [0, ''])[1];
+    const open = orders.filter((o) => o.status === 'pendente' || o.status === 'aguardando').length;
+    const emb = [
+      ['orders', 'Primeira compra', 'Conclua 1 pedido', paid.length >= 1], ['cart', 'Cliente fiel', 'Conclua 5 pedidos', paid.length >= 5], ['star', 'Veterano', 'Conclua 10 pedidos', paid.length >= 10],
+      ['wallet', 'Investidor', 'R$ 100 em compras', total >= 10000], ['wallet', 'Grande cliente', 'R$ 500 em compras', total >= 50000], ['wallet', 'Carteira ativa', 'Faça uma recarga', !!(w && w.ledger.some((e) => e.type === 'recarga'))],
+      ['key', 'Pagou com saldo', 'Compre usando a carteira', paid.some((o) => o.paidWith === 'wallet')], ['heart', 'Curador', 'Favorite um produto', wl.products.length > 0],
+    ];
+    if (S.user.twofa) emb.push(['shield', 'Conta protegida', 'Verificação em duas etapas ativa', true]);
+    const got = emb.filter((e) => e[3]).length;
+    el.innerHTML = `<div class="pf"><div class="pf-banner"></div><div class="pf-id"><span class="avatar lg" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span>
+        <h1 class="pf-name">${esc(S.user.name)}</h1><span class="pf-tier">${tier ? `${ico('star', 18)} Cliente ${tier}` : 'Cliente novo'}</span><span class="pf-mail">${esc(S.user.email)}</span></div>
+      <div class="pf-stats"><div class="pf-stat"><span>Total gasto</span><strong>${brl(total)}</strong></div><div class="pf-stat"><span>Pedidos</span><strong>${paid.length}</strong></div><div class="pf-stat"><span>Maior compra</span><strong>${brl(big)}</strong></div>
+        <div class="pf-stat hl"><span>Saldo da carteira</span><strong>${brl(S.balance)}</strong></div><div class="pf-stat"><span>Em andamento</span><strong>${open}</strong></div><div class="pf-stat"><span>Favoritos</span><strong>${wl.products.length}</strong></div></div></div>
+      <section class="panel"><div class="emb-head"><h3>Emblemas</h3><span><b>${got}</b>/${emb.length} desbloqueados</span></div><div class="emblems">${emb.map((e) => emblem(e[0], e[1], e[2], e[3])).join('')}</div></section>
+      <section class="panel"><h3>Dados da conta</h3><form id="perfil" class="stack"><label>Nome<input name="name" value="${esc(S.user.name)}" required maxlength="60"></label><label>E-mail<input value="${esc(S.user.email)}" disabled></label><p class="fine">O e-mail é o endereço que outras pessoas usam para te enviar saldo. Para trocar, fale com o suporte.</p><div class="actions"><button class="btn">Salvar nome</button></div></form></section>`;
     $('#perfil', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { S.user = (await post('account', { name: e.target.name.value })).user; updateChrome('conta'); toast('Nome atualizado.'); render(); }); };
   };
   acctTabs.seguranca = async (el) => {
     el.innerHTML = `${acctHead('Segurança', 'Proteja a conta, o que você comprou e o saldo da carteira.')}
       <section class="panel"><h3>Trocar senha</h3><form id="senha" class="stack"><label>Senha atual<input type="password" name="currentPassword" autocomplete="current-password" required></label><label>Nova senha<input type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label><div class="actions"><button class="btn">Trocar senha</button></div></form></section>
-      <section class="panel"><h3>Verificação em duas etapas</h3><p>Status: ${S.user.twofa ? '<b class="ok">ativada</b>' : '<b class="bad">desativada</b>'}.</p>
-        <p class="fine">${S.user.twofa ? 'Ao entrar, além da senha, você digita o código do app autenticador. Transferências, saques e chaves de API também pedem o código.' : 'Com ela, um código do app autenticador é pedido a cada login e a cada transferência ou saque.'}</p>
-        <div class="actions">${S.user.twofa ? '<button class="btn btn-ghost" id="tf-off">Desativar</button>' : '<button class="btn" id="tf-on">Ativar verificação em duas etapas</button>'}</div></section>`;
+      ${S.user.twofa
+    ? '<section class="panel"><h3>Verificação em duas etapas <span class="st-ok-badge">ativa</span></h3><p class="fine">Ao entrar, além da senha, você digita o código do app autenticador. Transferências, saques e chaves de API também pedem o código.</p><div class="actions"><button class="btn btn-ghost" id="tf-off">Desativar</button></div></section>'
+    : '<section class="panel"><div class="opt-row"><p class="fine">Proteção extra opcional: use um app autenticador para confirmar logins e movimentações.</p><button class="btn btn-ghost btn-small" id="tf-on">Configurar</button></div></section>'}`;
     $('#senha', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { await post('account', formObj(e.target)); e.target.reset(); toast('Senha alterada.'); }); };
     const on = $('#tf-on', el); if (on) on.onclick = () => run(on, twofaSetup);
     const off = $('#tf-off', el);
@@ -826,7 +886,6 @@
     if (!sx.session) warn.push('A variável <b>SESSION_SECRET</b> não está configurada no Vercel. Sem ela ninguém consegue entrar.');
     if (!sx.adminEmails) warn.push('A variável <b>ADMIN_EMAIL</b> não está configurada. Defina o seu e-mail no Vercel e crie a conta com ele para virar admin.');
     if (!sx.misticpay) warn.push('Os pagamentos PIX não estão ligados: configure <b>MISTICPAY_CLIENT_ID</b> e <b>MISTICPAY_CLIENT_SECRET</b> no Vercel (chave de acesso da MisticPay) e faça o redeploy.');
-    if (!sx.twofa) warn.push('Sua conta de admin ainda não tem <b>verificação em duas etapas</b>. O painel mexe com dinheiro e estoque: ative em <a href="#/conta">Minha conta</a>.');
     if (!sx.setupKey) tips.push('Defina a variável <b>ADMIN_SETUP_KEY</b> no Vercel. Sem verificação de e-mail, ela impede que outra pessoa crie a conta do administrador antes de você.');
     if (!sx.discord) tips.push('Ligue os <b>avisos no Discord</b> (Configurações) para saber na hora de vendas, entregas manuais, tickets e estoque baixo.');
     const secs = SECS.map((s) => { const v = st.bySection[s] || { revenue: 0, orders: 0 }; return `<li><span>${esc(secName(s))}</span><b>${brl(v.revenue)}</b><em>${v.orders} item(ns)</em></li>`; }).join('');
