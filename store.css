@@ -298,3 +298,50 @@ body.plain .bg { background: #150807; }
 textarea[name=terms], textarea[name=refund], textarea[name=privacy] { width: 100%; font-family: inherit; }
 .sum[hidden] { display: none; }
 .pinfo .actions, .section .actions { margin-top: 14px; }
+
+/* ===== Minha conta (área do cliente) e carteira ===== */
+.acct { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; max-width: 1300px; margin: 0 auto; padding: calc(var(--navh) + 24px) clamp(14px, 3vw, 32px) 40px; min-height: 80vh; align-items: start; }
+.acct-nav { position: sticky; top: calc(var(--navh) + 16px); display: grid; gap: 2px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.acct-id { display: flex; gap: 12px; align-items: center; padding: 4px 6px 14px; margin-bottom: 8px; border-bottom: 1px solid var(--line); min-width: 0; }
+.acct-id > div { display: grid; min-width: 0; line-height: 1.3; }
+.acct-id strong, .acct-id .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-id .muted { font-size: 0.82rem; }
+.avatar { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, var(--gold), var(--flame)); color: var(--ink); font: 900 1.4rem var(--display); }
+.acct-nav a { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-decoration: none; padding: 9px 12px; border-radius: 6px; font-weight: 500; font-size: 0.95rem; }
+.acct-nav a:hover { background: rgba(255, 200, 61, 0.1); }
+.acct-nav a.on { background: var(--gold); color: var(--ink); font-weight: 700; }
+.navbal { font-size: 0.8rem; font-weight: 700; opacity: 0.85; }
+.acct-nav .linkbtn { text-align: left; padding: 10px 12px; margin-top: 8px; border-top: 1px solid var(--line); border-radius: 0; }
+.acct-main { min-width: 0; display: grid; gap: 18px; align-content: start; }
+.acct-head h1 { font: 900 clamp(2.2rem, 5vw, 3.4rem) / 1 var(--display); }
+.acct-head .lead { margin: 6px 0 0; }
+.acct-main .cols { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.acct-main .panel .adm-head h3 { margin: 0; }
+.wcard { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px; padding: 24px clamp(18px, 3vw, 32px); border-radius: 12px; border: 1px solid var(--gold); background: linear-gradient(135deg, rgba(255, 200, 61, 0.16), rgba(255, 90, 31, 0.1)), var(--panel); }
+.wbalance { display: grid; }
+.wbal { font: 900 clamp(2.6rem, 7vw, 4rem) / 1 var(--display); color: var(--gold); }
+.wbal.sm { font-size: 1.8rem; }
+.walletchip { padding: 2px 12px; border: 1px solid var(--gold); border-radius: 99px; color: var(--gold) !important; font-weight: 700; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.chipbtn { cursor: pointer; padding: 7px 16px; border-radius: 99px; border: 1px solid var(--line); background: rgba(26, 9, 7, 0.6); color: var(--cream); font-weight: 700; }
+.chipbtn:hover { border-color: var(--gold); background: rgba(255, 200, 61, 0.14); }
+.feebox { padding: 12px 14px; border: 1px dashed var(--line); border-radius: 8px; }
+.feebox .sum { border-top: 0; padding: 4px 0; }
+.feebox .sum.total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.tbl .num, .tbl th.num { text-align: right; white-space: nowrap; }
+.mv { display: inline-block; padding: 1px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 700; border: 1px solid var(--line); color: var(--muted); }
+.mv-recarga, .mv-recebido { color: var(--ok); border-color: var(--ok); }
+.mv-envio, .mv-saque, .mv-compra { color: var(--gold); border-color: var(--gold); }
+.mv-estorno, .mv-ajuste { color: #9ec9ff; border-color: #9ec9ff; }
+.st-enviado { color: var(--ok); } .st-recusado, .st-falhou { color: var(--bad); }
+.tarifas li b { color: var(--gold); text-align: right; }
+.apidoc { padding: 12px 0; border-top: 1px solid var(--line); }
+.apidoc pre { margin-top: 6px; font-size: 0.82rem; overflow-x: auto; }
+.paymethod .check span { line-height: 1.3; }
+.buy label[hidden], .stack label[hidden] { display: none !important; }
+@media (max-width: 900px) {
+  .acct { grid-template-columns: 1fr; }
+  .acct-nav { position: static; display: flex; overflow-x: auto; gap: 4px; align-items: center; }
+  .acct-id { display: none; }
+  .acct-nav a, .acct-nav .linkbtn { white-space: nowrap; margin: 0; border-top: 0; }
+}

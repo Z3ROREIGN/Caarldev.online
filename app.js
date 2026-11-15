@@ -14,7 +14,7 @@
   const SEC_COLOR = { discord: '#9b8cff', roblox: '#ff5a1f', outros: '#ffc83d' };
   const STATUS = { pendente: 'Aguardando pagamento', aguardando: 'Pagamento em análise', pago: 'Pago', entregue: 'Entregue', cancelado: 'Cancelado', expirado: 'Expirado', reembolsado: 'Reembolsado' };
   const badge = (s) => `<span class="st st-${esc(s)}">${esc(STATUS[s] || s)}</span>`;
-  const S = { user: null, config: { sections: {}, contacts: {} }, cats: [], banned: null, loaded: false, cleanup: null, wishBack: 0 };
+  const S = { user: null, config: { sections: {}, contacts: {} }, cats: [], banned: null, loaded: false, cleanup: null, wishBack: 0, balance: 0 };
   const secName = (s) => (S.config.sections[s] && S.config.sections[s].name) || s;
   const toCents = (v) => { v = String(v == null ? '' : v).trim(); if (!v) return 0; if (v.includes(',')) v = v.replace(/\./g, '').replace(',', '.'); const n = parseFloat(v.replace(/[^\d.]/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
   const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -102,7 +102,7 @@
   /* ---------- Estado e navegação ---------- */
   async function boot() {
     const b = await api('bootstrap');
-    S.user = b.user; S.config = b.config; S.cats = b.categories; S.banned = b.banned; S.wishBack = b.wishBack || 0; S.loaded = true;
+    S.user = b.user; S.config = b.config; S.cats = b.categories; S.banned = b.banned; S.wishBack = b.wishBack || 0; S.balance = b.balance || 0; S.loaded = true;
   }
   const hasOutros = () => S.cats.some((c) => c.section === 'outros');
   function updateChrome(name) {
@@ -111,7 +111,7 @@
     const n = cart.count();
     $('#nav').innerHTML = secs.map((s) => `<a href="#/${s}"${on(s)}>${esc(secName(s))}</a>`).join('') + `<a href="#/portfolio"${on('portfolio')}>Portfólio</a>` +
       (n || name === 'carrinho' ? `<a href="#/carrinho"${on('carrinho')}>Carrinho${n ? ` <b class="cartn">${n}</b>` : ''}</a>` : '') +
-      (S.user ? `${isStaff() ? `<a class="btn btn-small" href="#/admin">Painel</a>` : ''}<a href="#/suporte"${on('suporte')}>Suporte</a><a href="#/conta"${on('conta')}>Minha conta${S.wishBack ? ' <i class="dot" title="Um favorito voltou ao estoque"></i>' : ''}</a><button class="linkbtn" data-act="logout">Sair</button>`
+      (S.user ? `${isStaff() ? `<a class="btn btn-small" href="#/admin">Painel</a>` : ''}<a href="#/suporte"${on('suporte')}>Suporte</a>${(S.config.wallet || {}).enabled === false ? '' : `<a class="walletchip" href="#/conta/carteira" title="Saldo da carteira">${brl(S.balance)}</a>`}<a href="#/conta"${on('conta')}>Minha conta${S.wishBack ? ' <i class="dot" title="Um favorito voltou ao estoque"></i>' : ''}</a><button class="linkbtn" data-act="logout">Sair</button>`
         : `<a href="#/entrar"${on('entrar')}>Entrar</a><a class="btn btn-small" href="#/cadastro">Criar conta</a>`);
     const a = S.config.announcement, bn = $('#banner');
     bn.hidden = !a; bn.className = a ? `banner ${esc(a.tone)}` : ''; bn.textContent = a ? a.text : '';
@@ -150,7 +150,7 @@
     const el = e.target.closest('[data-act]');
     if (!el) return;
     const act = el.dataset.act;
-    if (act === 'logout') { await run(el, async () => { await post('logout'); S.user = null; S.wishBack = 0; location.hash = '#/'; render(); toast('Você saiu da conta.'); }); }
+    if (act === 'logout') { await run(el, async () => { await post('logout'); S.user = null; S.wishBack = 0; S.balance = 0; location.hash = '#/'; render(); toast('Você saiu da conta.'); }); }
     if (act === 'copy') copy(el.dataset.copy);
   });
 
@@ -248,19 +248,21 @@
               <label class="full">${p.delivery === 'manual' ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" ${p.delivery === 'manual' ? 'required' : ''} placeholder="${p.delivery === 'manual' ? 'Para combinarmos a entrega' : 'Discord ou WhatsApp'}" ${out ? 'disabled' : ''}></label>
               <label class="full">CPF de quem vai pagar<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" ${p.price > 0 ? 'required' : ''} ${out ? 'disabled' : ''}></label>
               <div class="total full"><span>Total</span><strong id="total">${brl(p.price)}</strong></div>
+              ${p.price > 0 ? payMethodHtml() : ''}
               <label class="check full terms"><input type="checkbox" name="terms" required ${out ? 'disabled' : ''}> <span>Li e aceito os <a href="#/termos" target="_blank">Termos de uso</a> e a <a href="#/reembolso" target="_blank">política de reembolso e garantia</a>.</span></label>
               <button class="btn full" ${out ? 'disabled' : ''}>${out ? 'Esgotado' : 'Comprar agora'}</button>
               <button type="button" class="btn btn-ghost full" id="addcart" ${out ? 'disabled' : ''}>Adicionar ao carrinho</button>
-              <p class="fine full">${esc(delivery)} Pagamento por PIX com confirmação automática. O CPF é exigido pelo PIX e usado só para gerar a cobrança; não fica guardado.</p>
+              <p class="fine full">${esc(delivery)} Pague por PIX (confirmação automática) ou com o saldo da sua carteira. No PIX, o CPF é exigido e usado só para gerar a cobrança; não fica guardado.</p>
             </form>
             <div class="actions"><button type="button" class="btn btn-ghost btn-small" id="fav">${favLabel()}</button><button type="button" class="btn btn-ghost btn-small" data-act="copy" data-copy="${esc(location.origin)}/p/${esc(p.id)}">Copiar link do produto</button></div></div></div>
         ${p.description ? `<section class="section"><h2>Sobre este produto</h2><p class="desc">${esc(p.description)}</p></section>` : ''}
         ${p.includes.length ? `<section class="section"><h2>O que vem incluso</h2><ul class="includes">${p.includes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></section>` : ''}
         ${reviewsHtml(rv)}</div>`,
       mount(el) {
-        const f = $('#buy', el); let discount = 0;
+        const f = $('#buy', el); let discount = 0, upd = () => {};
         const qty = () => Math.max(1, Math.min(max, parseInt(f.qty.value, 10) || 1));
-        const total = () => { $('#total', el).textContent = brl(Math.max(0, p.price * qty() - discount)); };
+        const total = () => { $('#total', el).textContent = brl(Math.max(0, p.price * qty() - discount)); upd(); };
+        upd = bindPay(f, () => Math.max(0, p.price * qty() - discount));
         f.qty.addEventListener('input', () => { discount = 0; total(); });
         f.cpf.addEventListener('input', () => { const d = f.cpf.value.replace(/\D/g, '').slice(0, 11); f.cpf.value = d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); });
         $('#aplicar', el).onclick = (e) => {
@@ -270,7 +272,7 @@
         f.onsubmit = (e) => {
           e.preventDefault();
           if (!S.user) { location.hash = `#/entrar?next=${encodeURIComponent('#/produto/' + p.id)}`; return; }
-          run($('.btn:not(.btn-ghost)', f), async () => { const r = await post('order', { items: [{ productId: p.id, qty: qty() }], coupon: f.coupon.value, contact: f.contact.value, cpf: f.cpf.value, terms: f.terms.checked }); location.hash = `#/pedido/${r.order.id}`; });
+          run($('.btn:not(.btn-ghost)', f), async () => { const wal = payWithOf(f) === 'wallet', r = await post('order', { items: [{ productId: p.id, qty: qty() }], coupon: f.coupon.value, contact: f.contact.value, cpf: f.cpf.value, terms: f.terms.checked, payWith: payWithOf(f) }); if (wal) await boot(); location.hash = `#/pedido/${r.order.id}`; });
         };
         $('#addcart', el).onclick = () => { if (cart.add(p.id, qty())) { toast('Adicionado ao carrinho.'); updateChrome('produto'); } else toast('O carrinho aceita no máximo 10 produtos diferentes.', 'err'); };
         $$('[data-img]', el).forEach((b) => b.onclick = () => { $('#gmain', el).src = b.dataset.img; $$('[data-img]', el).forEach((x) => x.classList.toggle('on', x === b)); });
@@ -287,6 +289,27 @@
       },
     };
   };
+
+  /* ---------- Forma de pagamento: PIX ou saldo da carteira ---------- */
+  const payMethodHtml = () => {
+    if (!S.user || (S.config.wallet || {}).enabled === false) return '';
+    return `<fieldset class="fieldset paymethod full"><legend>Forma de pagamento</legend>
+      <label class="check"><input type="radio" name="payWith" value="pix" checked> <span>PIX (QR Code, confirmação automática)</span></label>
+      <label class="check"><input type="radio" name="payWith" value="wallet"> <span>Saldo da carteira · <b>${brl(S.balance)}</b></span></label>
+      <p class="fine" id="paynote" hidden></p></fieldset>`;
+  };
+  // Liga a escolha de pagamento ao formulário. Devolve a função que deve ser chamada quando o total mudar.
+  const bindPay = (f, totalFn) => {
+    if (!f.payWith) return () => {};
+    const upd = () => {
+      const wal = f.payWith.value === 'wallet', tot = totalFn(), lab = f.cpf.closest('label'), note = $('#paynote', f), short = wal && tot > S.balance;
+      f.cpf.required = !wal && tot > 0; if (lab) lab.hidden = wal;
+      note.hidden = !short; note.innerHTML = short ? `Saldo insuficiente (você tem ${brl(S.balance)}). <a href="#/conta/carteira">Recarregar carteira</a>` : '';
+    };
+    $$('[name=payWith]', f).forEach((x) => x.addEventListener('change', upd));
+    return upd;
+  };
+  const payWithOf = (f) => (f.payWith ? f.payWith.value : 'pix');
 
   /* ---------- Carrinho ---------- */
   views.carrinho = async () => {
@@ -313,21 +336,23 @@
           <label>Cupom<span class="inline"><input name="coupon" placeholder="Opcional" autocomplete="off"><button type="button" class="btn btn-ghost btn-small" id="aplicar">Aplicar</button></span></label>
           <label>${hasManual ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" ${hasManual ? 'required' : ''} placeholder="${hasManual ? 'Para combinarmos as entregas manuais' : 'Discord ou WhatsApp'}"></label>
           <label>CPF de quem vai pagar<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" required></label>
+          ${payMethodHtml()}
           <label class="check terms"><input type="checkbox" name="terms" required> <span>Li e aceito os <a href="#/termos" target="_blank">Termos de uso</a> e a <a href="#/reembolso" target="_blank">política de reembolso e garantia</a>.</span></label>
-          <button class="btn">Finalizar compra</button><p class="fine">Um único PIX para todos os itens. O estoque fica reservado enquanto você paga.</p></form>` : '<p class="muted">Nenhum item disponível para comprar.</p>'}
+          <button class="btn">Finalizar compra</button><p class="fine">Pagando por PIX, um único PIX cobre todos os itens e o estoque fica reservado enquanto você paga. Com saldo, a compra é liberada na hora.</p></form>` : '<p class="muted">Nenhum item disponível para comprar.</p>'}
           <div class="actions"><button type="button" class="btn btn-ghost btn-small" id="limpar">Esvaziar carrinho</button><a class="btn btn-ghost btn-small" href="#/">Continuar comprando</a></div></section></div></div>`,
       mount(el) {
-        let discount = 0;
+        let discount = 0, curTotal = 0, upd = () => {};
         const qtyOf = (row) => Math.max(1, Math.min(maxOf(row.p), parseInt($('.cqty', row.el).value, 10) || 1));
         live.forEach((r) => { r.el = $(`.crow[data-pid="${CSS.escape(r.p.id)}"]`, el); });
         const sum = () => {
           const sub = live.reduce((s, r) => s + r.p.price * qtyOf(r), 0);
-          if ($('#sub', el)) { $('#sub', el).textContent = brl(sub); $('#tot', el).textContent = brl(Math.max(0, sub - discount)); const d = $('#dsc', el); d.hidden = !discount; $('b', d).textContent = `-${brl(discount)}`; }
+          if ($('#sub', el)) { $('#sub', el).textContent = brl(sub); curTotal = Math.max(0, sub - discount); $('#tot', el).textContent = brl(curTotal); upd(); const d = $('#dsc', el); d.hidden = !discount; $('b', d).textContent = `-${brl(discount)}`; }
         };
         live.forEach((r) => { $('.cqty', r.el).addEventListener('input', () => { const q = qtyOf(r); cart.setQty(r.p.id, q); $('.cline', r.el).textContent = brl(r.p.price * q); discount = 0; sum(); updateChrome('carrinho'); }); });
         $$('[data-rm]', el).forEach((b) => b.onclick = () => { cart.remove(b.dataset.rm); render(); });
         $('#limpar', el).onclick = () => { cart.clear(); render(); };
         const f = $('#co', el); if (!f) return;
+        upd = bindPay(f, () => curTotal);
         sum();
         f.cpf.addEventListener('input', () => { const d = f.cpf.value.replace(/\D/g, '').slice(0, 11); f.cpf.value = d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); });
         const payload = () => live.map((r) => ({ productId: r.p.id, qty: qtyOf(r) }));
@@ -338,7 +363,7 @@
         f.onsubmit = (e) => {
           e.preventDefault();
           if (!S.user) { location.hash = `#/entrar?next=${encodeURIComponent('#/carrinho')}`; return; }
-          run($('.btn:not(.btn-ghost)', f), async () => { const r = await post('order', { items: payload(), coupon: f.coupon.value, contact: f.contact.value, cpf: f.cpf.value, terms: f.terms.checked }); cart.clear(); location.hash = `#/pedido/${r.order.id}`; });
+          run($('.btn:not(.btn-ghost)', f), async () => { const wal = payWithOf(f) === 'wallet', r = await post('order', { items: payload(), coupon: f.coupon.value, contact: f.contact.value, cpf: f.cpf.value, terms: f.terms.checked, payWith: payWithOf(f) }); cart.clear(); if (wal) await boot(); location.hash = `#/pedido/${r.order.id}`; });
         };
       },
     };
@@ -404,31 +429,212 @@
       };
     });
   }
-  views.conta = async () => {
+  /* ---------- Minha conta (área do cliente) ---------- */
+  // Seções: #/conta (visão geral), #/conta/carteira, pedidos, favoritos, seguranca, api, perfil.
+  const WC = () => S.config.wallet || {};
+  const wFee = (a) => Math.round(a * (WC().withdrawPct || 0) / 100) + (WC().withdrawFixed || 0);   // mesma conta do servidor
+  const cpfMask = (inp) => inp.addEventListener('input', () => { const d = inp.value.replace(/\D/g, '').slice(0, 11); inp.value = d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); });
+  const MOV = { recarga: 'Recarga', compra: 'Compra', envio: 'Envio', recebido: 'Recebido', saque: 'Saque', estorno: 'Estorno', ajuste: 'Ajuste' };
+  const WST = { pendente: 'Em análise', enviando: 'Processando', enviado: 'Enviado', recusado: 'Recusado', falhou: 'Não enviado' };
+  const signed = (c) => `${c < 0 ? '−' : '+'} ${brl(Math.abs(c))}`;
+  const movRow = (e) => `<tr><td class="nowrap">${dt(e.at)}</td><td>${esc(e.desc)}${e.note ? `<span class="muted"> · “${esc(e.note)}”</span>` : ''}</td><td><span class="mv mv-${esc(e.type)}">${esc(MOV[e.type] || e.type)}</span></td><td class="num ${e.amount < 0 ? 'down' : 'up'}">${signed(e.amount)}</td><td class="num muted">${e.fee ? brl(e.fee) : '—'}</td><td class="num">${brl(e.balance)}</td></tr>`;
+  const ledgerTable = (rows) => (rows.length ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th class="num">Valor</th><th class="num">Taxa</th><th class="num">Saldo</th></tr></thead><tbody id="mvbody">${rows.map(movRow).join('')}</tbody></table></div>`
+    : empty('Nenhuma movimentação', 'Recarregue a carteira para começar. Compras, transferências e saques aparecem aqui.'));
+  const walletCard = () => `<div class="wcard"><div class="wbalance"><span class="muted">Saldo disponível</span><strong class="wbal">${brl(S.balance)}</strong></div>
+    ${WC().enabled === false ? '<p class="notice">A carteira está desativada no momento.</p>' : '<div class="actions"><button class="btn" data-w="deposit">Recarregar</button><button class="btn btn-ghost" data-w="transfer">Transferir</button><button class="btn btn-ghost" data-w="withdraw">Sacar</button></div>'}</div>`;
+  const bindWallet = (el) => $$('[data-w]', el).forEach((b) => { b.onclick = () => ({ deposit: depositModal, transfer: transferModal, withdraw: withdrawModal })[b.dataset.w](); });
+  const afterMoney = async () => { await boot(); render(); };
+
+  function depositModal() {
+    const w = WC();
+    const m = openModal(`<form class="stack"><h3>Recarregar carteira</h3>
+      <p class="muted">Pague por PIX e o saldo entra sozinho assim que o pagamento cair. Mínimo ${brl(w.minDeposit)}${w.depositFee ? `, taxa de ${brl(w.depositFee)}` : ', sem taxa'}.</p>
+      <div class="presets">${[1000, 2500, 5000, 10000].map((v) => `<button type="button" class="chipbtn" data-v="${v}">${brl(v)}</button>`).join('')}</div>
+      <label>Valor (R$)<input name="amount" inputmode="decimal" placeholder="0,00" autocomplete="off" required></label>
+      <label>CPF de quem vai pagar<input name="cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" autocomplete="off" required></label>
+      <p class="fine">O CPF é exigido pelo PIX e usado só para gerar a cobrança; não fica guardado.</p>
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn">Gerar PIX</button></div></form>`);
+    const f = $('form', m.el); cpfMask(f.cpf);
+    $$('.chipbtn', f).forEach((b) => { b.onclick = () => { f.amount.value = fromCents(+b.dataset.v); }; });
+    f.onsubmit = (e) => { e.preventDefault(); run($('.btn:not(.btn-ghost)', f), async () => { const r = await post('wallet/deposit', { amount: toCents(f.amount.value), cpf: f.cpf.value }); m.close(); showDeposit(r.deposit); }); };
+  }
+  // PIX da recarga: mostra o código e confere o pagamento a cada 5 s. Se fechar a janela, a recarga continua em "Recargas em aberto".
+  function showDeposit(d) {
+    const m = openModal(`<h3>Pague ${brl(d.amount)} por PIX</h3>
+      <div class="pay-grid">${d.pay.qr ? `<div><img class="qr" src="${esc(d.pay.qr)}" alt="QR Code do PIX" width="200" height="200"></div>` : ''}<div><span class="muted">PIX Copia e Cola</span><code class="key pixcode">${esc(d.pay.copyPaste)}</code></div></div>
+      <p class="fine" id="dstat">Aguardando o pagamento. O saldo entra sozinho, não precisa avisar.</p>
+      <div class="modal-actions"><button class="btn btn-ghost" id="dcancel">Cancelar recarga</button><button class="btn btn-ghost" data-act="copy" data-copy="${esc(d.pay.copyPaste)}">Copiar código</button><button class="btn" data-close>Fechar</button></div>`);
+    const t = setInterval(async () => {
+      if (!m.el.isConnected) { clearInterval(t); return; }
+      try {
+        const x = (await api('wallet/deposit', { query: { id: d.id } })).deposit;
+        if (x.status === 'pago') { clearInterval(t); m.close(); toast(`Recarga confirmada: ${brl(x.credited)} na carteira!`); afterMoney(); }
+        else if (x.status !== 'pendente') { clearInterval(t); m.close(); toast('Essa recarga não está mais aguardando pagamento.', 'err'); render(); }
+      } catch (_) { /* tenta de novo */ }
+    }, 5000);
+    $('#dcancel', m.el).onclick = (e) => run(e.target, async () => { await post('wallet/deposit/cancel', { id: d.id }); clearInterval(t); m.close(); toast('Recarga cancelada.'); render(); });
+  }
+  const secFields = () => `<label>Sua senha<input type="password" name="password" autocomplete="current-password" required></label>${S.user.twofa ? '<label>Código do app autenticador<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>' : ''}`;
+  function transferModal() {
+    const w = WC();
+    const m = openModal(`<form class="stack"><h3>Transferir saldo</h3>
+      <label>E-mail do destinatário<input type="email" name="to" required autocomplete="off"></label><p class="fine" id="who" aria-live="polite"></p>
+      <label>Valor da transferência (R$)<input name="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label>
+      <label>Mensagem (opcional)<input name="note" maxlength="80"></label>
+      <div class="feebox" id="prev"></div>${secFields()}
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn">Transferir</button></div></form>`);
+    const f = $('form', m.el), prev = $('#prev', m.el);
+    const calc = () => {
+      const a = toCents(f.amount.value);
+      if (!a) { prev.innerHTML = `<span class="muted">Taxas: ${brl(w.transferFee)} para enviar e ${brl(w.receiveFee)} para receber (descontada de quem recebe).</span>`; return; }
+      const pay = a + w.transferFee, recv = a - w.receiveFee;
+      prev.innerHTML = `<div class="sum"><span>Valor</span><b>${brl(a)}</b></div><div class="sum"><span>Taxa de envio</span><b>${brl(w.transferFee)}</b></div><div class="sum total"><span>Você paga</span><b>${brl(pay)}</b></div>
+        <p class="fine">${recv > 0 ? `O destinatário recebe ${brl(recv)} (já descontada a taxa de recebimento de ${brl(w.receiveFee)}).` : 'Valor menor que a taxa de recebimento.'}${pay > S.balance ? ` <b class="bad">Saldo insuficiente: você tem ${brl(S.balance)}.</b>` : ''}</p>`;
+    };
+    calc(); f.amount.addEventListener('input', calc);
+    f.to.addEventListener('change', async () => {
+      const who = $('#who', m.el); who.textContent = '';
+      if (!f.to.value) return;
+      try { const r = await post('wallet/lookup', { to: f.to.value }); who.innerHTML = `Destinatário: <b class="ok">${esc(r.to.name)}</b> (${esc(r.to.email)})`; }
+      catch (er) { who.innerHTML = `<span class="bad">${esc(er.message)}</span>`; }
+    });
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      run($('.btn:not(.btn-ghost)', f), async () => {
+        const r = (await post('wallet/transfer', { ...formObj(f), amount: toCents(f.amount.value) })).transfer;
+        m.close(); toast(`Enviado para ${r.to.name}. Você pagou ${brl(r.charged)}; ele recebeu ${brl(r.received)}.`); afterMoney();
+      });
+    };
+  }
+  function withdrawModal() {
+    const w = WC(), types = [['CPF', 'CPF'], ['CNPJ', 'CNPJ'], ['EMAIL', 'E-mail'], ['TELEFONE', 'Telefone'], ['CHAVE_ALEATORIA', 'Chave aleatória']];
+    const m = openModal(`<form class="stack"><h3>Sacar por PIX</h3>
+      <p class="muted">Taxa de ${w.withdrawPct}% + ${brl(w.withdrawFixed)} por saque. Mínimo ${brl(w.minWithdraw)}${w.dailyWithdrawMax ? `, até ${brl(w.dailyWithdrawMax)} por dia` : ''}. ${w.withdrawMode === 'auto' ? 'O PIX é enviado automaticamente.' : 'Cada saque passa por uma análise da loja antes do envio.'}</p>
+      <label>Valor a sacar da carteira (R$)<input name="amount" inputmode="decimal" placeholder="0,00" required autocomplete="off"></label>
+      <div class="grid2"><label>Tipo da chave PIX<select name="keyType">${types.map(([k, n]) => `<option value="${k}">${n}</option>`).join('')}</select></label><label>Chave PIX<input name="key" required autocomplete="off"></label></div>
+      <p class="fine">Use uma chave que seja sua. Confira com atenção: PIX enviado para a chave errada não tem volta.</p>
+      <div class="feebox" id="prev"></div>${secFields()}
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn">Pedir saque</button></div></form>`);
+    const f = $('form', m.el), prev = $('#prev', m.el);
+    const calc = () => {
+      const a = toCents(f.amount.value);
+      if (!a) { prev.innerHTML = `<span class="muted">Você escolhe o valor e vê aqui quanto chega no PIX.</span>`; return; }
+      const fee = wFee(a), net = a - fee;
+      prev.innerHTML = `<div class="sum"><span>Sai da carteira</span><b>${brl(a)}</b></div><div class="sum"><span>Taxa (${w.withdrawPct}% + ${brl(w.withdrawFixed)})</span><b>-${brl(fee)}</b></div><div class="sum total"><span>Chega no seu PIX</span><b>${brl(Math.max(0, net))}</b></div>${a > S.balance ? `<p class="fine"><b class="bad">Saldo insuficiente: você tem ${brl(S.balance)}.</b></p>` : ''}`;
+    };
+    calc(); f.amount.addEventListener('input', calc);
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      run($('.btn:not(.btn-ghost)', f), async () => {
+        const r = await post('wallet/withdraw', { ...formObj(f), amount: toCents(f.amount.value) });
+        m.close();
+        if (r.withdrawal.status === 'falhou') toast('Não foi possível enviar o PIX agora. O valor voltou para a sua carteira.', 'err');
+        else toast(r.withdrawal.status === 'enviado' ? `PIX de ${brl(r.withdrawal.net)} enviado.` : 'Saque pedido. Assim que a loja aprovar, o PIX é enviado.');
+        afterMoney();
+      });
+    };
+  }
+
+  const acctTabs = {};
+  const ACCT = [['visao', 'Visão geral'], ['carteira', 'Carteira'], ['pedidos', 'Pedidos'], ['favoritos', 'Favoritos'], ['seguranca', 'Segurança'], ['api', 'Chaves de API'], ['perfil', 'Perfil']];
+  views.conta = async ([tab = 'visao'], q) => {
     if (!S.user) return needLogin();
-    const [{ orders }, wl] = await Promise.all([api('orders'), api('wishlist').catch(() => ({ products: [] }))]);
-    const rows = orders.map((o) => `<a class="orow" href="#/pedido/${esc(o.id)}"><div><strong>${esc(orderLabel(o))}</strong><span class="muted">${esc(o.code)} · ${dt(o.createdAt)}</span></div><div class="orow-r"><b>${brl(o.total)}</b>${badge(o.status)}</div></a>`).join('');
-    const favs = wl.products.map((p) => `<div class="orow static"><div><a href="#/produto/${esc(p.id)}"><strong>${esc(p.name)}</strong></a><span class="muted">${brl(p.price)} · ${esc(stockLabel(p))}</span></div><div class="orow-r">${p.back ? '<span class="st st-entregue">Voltou ao estoque!</span>' : soldOut(p) ? '<span class="st st-cancelado">Esgotado</span>' : ''}<button class="btn btn-ghost btn-small" data-unfav="${esc(p.id)}">Remover</button></div></div>`).join('');
+    if (!acctTabs[tab]) tab = 'visao';
+    const nav = ACCT.filter(([id]) => id !== 'api' || WC().apiEnabled !== false)
+      .map(([id, n]) => `<a href="#/conta${id === 'visao' ? '' : '/' + id}" class="${id === tab ? 'on' : ''}"${id === tab ? ' aria-current="page"' : ''}>${n}${id === 'carteira' && WC().enabled !== false ? `<span class="navbal">${brl(S.balance)}</span>` : ''}${id === 'favoritos' && S.wishBack ? '<i class="dot"></i>' : ''}</a>`).join('');
     return {
-      title: 'Minha conta', html: `<div class="page"><header class="page-head"><h1>Olá, ${esc(S.user.name.split(' ')[0])}</h1><p class="lead">${esc(S.user.email)}</p></header>
-        <div class="cols"><div><section class="section"><h2>Meus pedidos</h2>${orders.length ? `<div class="olist">${rows}</div>` : empty('Nenhum pedido ainda', 'Quando você comprar, o pedido e a entrega aparecem aqui.', '<a class="btn" href="#/">Ver produtos</a>')}</section>
-          <section class="section"><h2>Favoritos</h2>${favs ? `<div class="olist">${favs}</div>` : '<p class="muted">Favorite um produto para acompanhá-lo aqui. Se ele estiver esgotado, avisamos nesta página quando voltar ao estoque.</p>'}</section></div>
-        <div><section class="section"><h2>Dados da conta</h2><form id="perfil" class="stack"><label>Nome<input name="name" value="${esc(S.user.name)}" required maxlength="60"></label><button class="btn btn-ghost">Salvar nome</button></form>
-          <h3 class="mt">Trocar senha</h3><form id="senha" class="stack"><label>Senha atual<input type="password" name="currentPassword" autocomplete="current-password" required></label><label>Nova senha<input type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label><button class="btn btn-ghost">Trocar senha</button></form></section>
-          <section class="section"><h2>Segurança</h2><p>Verificação em duas etapas: ${S.user.twofa ? '<b class="ok">ativada</b>' : '<b class="bad">desativada</b>'}.</p>
-            <p class="fine">${S.user.twofa ? 'Ao entrar, além da senha, você digita o código do app autenticador.' : 'Proteja a conta (e o que você comprou) com um código do app autenticador a cada login.'}</p>
-            ${S.user.twofa ? '<button class="btn btn-ghost" id="tf-off">Desativar</button>' : '<button class="btn" id="tf-on">Ativar verificação em duas etapas</button>'}</section></div></div></div>`,
+      title: 'Minha conta',
+      html: `<div class="acct"><aside class="acct-nav" aria-label="Minha conta"><div class="acct-id"><span class="avatar" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span><div><strong>${esc(S.user.name)}</strong><span class="muted">${esc(S.user.email)}</span></div></div>${nav}<button class="linkbtn" data-act="logout">Sair da conta</button></aside><section class="acct-main" id="acct"><p class="muted">Carregando…</p></section></div>`,
       mount(el) {
-        $('#perfil', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { S.user = (await post('account', { name: e.target.name.value })).user; updateChrome('conta'); toast('Nome atualizado.'); }); };
-        $('#senha', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { await post('account', formObj(e.target)); e.target.reset(); toast('Senha alterada.'); }); };
-        $$('[data-unfav]', el).forEach((b) => b.onclick = () => run(b, async () => { await post('wishlist/toggle', { pid: b.dataset.unfav, on: false }); await boot(); render(); }));
-        const on = $('#tf-on', el); if (on) on.onclick = () => run(on, twofaSetup);
-        const off = $('#tf-off', el);
-        if (off) off.onclick = () => {
-          const m = openModal(`<form class="stack"><h3>Desativar verificação em duas etapas</h3><label>Senha<input type="password" name="password" autocomplete="current-password" required></label><label>Código do app (ou de recuperação)<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-danger">Desativar</button></div></form>`);
-          $('form', m.el).onsubmit = (e) => { e.preventDefault(); run($('.btn-danger', e.target), async () => { S.user = (await post('account/2fa/disable', formObj(e.target))).user; m.close(); toast('Verificação em duas etapas desativada.'); render(); }); };
-        };
+        const body = $('#acct', el), load = () => acctTabs[tab](body, load, q).catch((e) => { body.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`; });
+        load();
       },
+    };
+  };
+  const acctHead = (t, sub) => `<header class="acct-head"><h1>${esc(t)}</h1>${sub ? `<p class="lead">${esc(sub)}</p>` : ''}</header>`;
+  const orderRows = (orders) => orders.map((o) => `<a class="orow" href="#/pedido/${esc(o.id)}"><div><strong>${esc(orderLabel(o))}</strong><span class="muted">${esc(o.code)} · ${dt(o.createdAt)}${o.paidWith === 'wallet' ? ' · saldo da carteira' : ''}</span></div><div class="orow-r"><b>${brl(o.total)}</b>${badge(o.status)}</div></a>`).join('');
+
+  acctTabs.visao = async (el) => {
+    const [w, { orders }] = await Promise.all([api('wallet').catch(() => null), api('orders')]);
+    if (w) S.balance = w.balance;
+    const open = w ? w.deposits.filter((d) => d.status === 'pendente').length : 0;
+    el.innerHTML = `${acctHead(`Olá, ${S.user.name.split(' ')[0]}`, 'Seu resumo na loja.')}${walletCard()}
+      ${open ? `<p class="notice">Você tem ${pl(open, 'recarga aguardando pagamento', 'recargas aguardando pagamento')}. <a href="#/conta/carteira">Ver recargas</a></p>` : ''}
+      ${S.user.twofa ? '' : '<p class="notice">Sua carteira ainda não tem <b>verificação em duas etapas</b>. Ative em <a href="#/conta/seguranca">Segurança</a> para proteger o saldo.</p>'}
+      <div class="cols"><section class="panel"><h3>Últimas movimentações</h3>${w && w.ledger.length ? `<ul class="rows">${w.ledger.slice(0, 5).map((e) => `<li><span>${esc(e.desc)}<br><em>${dt(e.at)}</em></span><b class="${e.amount < 0 ? 'down' : 'up'}">${signed(e.amount)}</b></li>`).join('')}</ul><a class="btn btn-ghost btn-small" href="#/conta/carteira">Ver extrato completo</a>` : '<p class="muted">Ainda não há movimentações na carteira.</p>'}</section>
+        <section class="panel"><h3>Pedidos recentes</h3>${orders.length ? `<div class="olist">${orderRows(orders.slice(0, 4))}</div><a class="btn btn-ghost btn-small" href="#/conta/pedidos">Ver todos os pedidos</a>` : '<p class="muted">Quando você comprar, o pedido e a entrega aparecem aqui.</p><a class="btn btn-small" href="#/">Ver produtos</a>'}</section></div>`;
+    bindWallet(el);
+  };
+
+  acctTabs.carteira = async (el, reload) => {
+    const w = await api('wallet'); S.balance = w.balance;
+    const c = WC(), open = w.deposits.filter((d) => d.status === 'pendente');
+    el.innerHTML = `${acctHead('Carteira', 'Recarregue por PIX, pague compras com o saldo, transfira e receba.')}${walletCard()}
+      <section class="panel"><h3>Tarifas</h3><ul class="rows tarifas"><li><span>Recarga por PIX</span><b>${c.depositFee ? brl(c.depositFee) : 'sem taxa'}</b></li><li><span>Transferir para outra conta</span><b>${brl(c.transferFee)} por envio</b></li><li><span>Receber uma transferência</span><b>${brl(c.receiveFee)} por recebimento</b></li><li><span>Sacar por PIX</span><b>${c.withdrawPct}% + ${brl(c.withdrawFixed)}</b></li><li><span>Pagar compras com o saldo</span><b>sem taxa</b></li></ul></section>
+      ${open.length ? `<section class="panel"><h3>Recargas em aberto</h3><div class="olist">${open.map((d) => `<div class="orow static"><div><strong>${brl(d.amount)}</strong><span class="muted">Criada em ${dt(d.createdAt)} · vence ${dt(d.expiresAt)}</span></div><div class="orow-r"><button class="btn btn-small" data-dep="${esc(d.id)}">Ver PIX</button></div></div>`).join('')}</div></section>` : ''}
+      <section class="panel"><div class="adm-head"><h3>Extrato</h3><a class="btn btn-ghost btn-small" href="${apiUrl('wallet/export')}">Baixar CSV</a></div>${ledgerTable(w.ledger)}${w.more ? '<button class="btn btn-ghost btn-small" id="mais">Carregar mais</button>' : ''}</section>
+      ${w.withdrawals.length ? `<section class="panel"><h3>Meus saques</h3><div class="olist">${w.withdrawals.map((x) => `<div class="orow static"><div><strong>${brl(x.amount)} <span class="muted">→ ${esc(x.keyType === 'CHAVE_ALEATORIA' ? 'chave aleatória' : x.keyType.toLowerCase())} ${esc(x.key)}</span></strong><span class="muted">${dt(x.createdAt)} · taxa ${brl(x.fee)} · chega ${brl(x.net)}${x.reason ? ' · ' + esc(x.reason) : ''}</span></div><div class="orow-r"><span class="st st-${esc(x.status)}">${esc(WST[x.status] || x.status)}</span></div></div>`).join('')}</div></section>` : ''}`;
+    bindWallet(el);
+    $$('[data-dep]', el).forEach((b) => { b.onclick = () => showDeposit(open.find((d) => d.id === b.dataset.dep)); });
+    let page = 0; const more = $('#mais', el);
+    if (more) more.onclick = () => run(more, async () => {
+      const n = await api('wallet', { query: { page: ++page } });
+      $('#mvbody', el).insertAdjacentHTML('beforeend', n.ledger.map(movRow).join(''));
+      if (!n.more) more.remove();
+    });
+  };
+
+  acctTabs.pedidos = async (el) => {
+    const { orders } = await api('orders');
+    el.innerHTML = `${acctHead('Pedidos', 'Entregas, downloads e garantia ficam dentro de cada pedido.')}<section class="panel">${orders.length ? `<div class="olist">${orderRows(orders)}</div>` : empty('Nenhum pedido ainda', 'Quando você comprar, o pedido e a entrega aparecem aqui.', '<a class="btn" href="#/">Ver produtos</a>')}</section>`;
+  };
+  acctTabs.favoritos = async (el, reload) => {
+    const wl = await api('wishlist').catch(() => ({ products: [] }));
+    const favs = wl.products.map((p) => `<div class="orow static"><div><a href="#/produto/${esc(p.id)}"><strong>${esc(p.name)}</strong></a><span class="muted">${brl(p.price)} · ${esc(stockLabel(p))}</span></div><div class="orow-r">${p.back ? '<span class="st st-entregue">Voltou ao estoque!</span>' : soldOut(p) ? '<span class="st st-cancelado">Esgotado</span>' : ''}<button class="btn btn-ghost btn-small" data-unfav="${esc(p.id)}">Remover</button></div></div>`).join('');
+    el.innerHTML = `${acctHead('Favoritos', 'Se um favorito estiver esgotado, avisamos aqui quando voltar ao estoque.')}<section class="panel">${favs ? `<div class="olist">${favs}</div>` : '<p class="muted">Favorite um produto para acompanhá-lo aqui.</p>'}</section>`;
+    $$('[data-unfav]', el).forEach((b) => { b.onclick = () => run(b, async () => { await post('wishlist/toggle', { pid: b.dataset.unfav, on: false }); await boot(); render(); }); });
+  };
+  acctTabs.perfil = async (el) => {
+    el.innerHTML = `${acctHead('Perfil')}<section class="panel"><form id="perfil" class="stack"><label>Nome<input name="name" value="${esc(S.user.name)}" required maxlength="60"></label><label>E-mail<input value="${esc(S.user.email)}" disabled></label><p class="fine">O e-mail é o endereço que outras pessoas usam para te enviar saldo. Para trocar, fale com o suporte.</p><div class="actions"><button class="btn">Salvar nome</button></div></form></section>`;
+    $('#perfil', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { S.user = (await post('account', { name: e.target.name.value })).user; updateChrome('conta'); toast('Nome atualizado.'); render(); }); };
+  };
+  acctTabs.seguranca = async (el) => {
+    el.innerHTML = `${acctHead('Segurança', 'Proteja a conta, o que você comprou e o saldo da carteira.')}
+      <section class="panel"><h3>Trocar senha</h3><form id="senha" class="stack"><label>Senha atual<input type="password" name="currentPassword" autocomplete="current-password" required></label><label>Nova senha<input type="password" name="newPassword" autocomplete="new-password" minlength="8" required></label><div class="actions"><button class="btn">Trocar senha</button></div></form></section>
+      <section class="panel"><h3>Verificação em duas etapas</h3><p>Status: ${S.user.twofa ? '<b class="ok">ativada</b>' : '<b class="bad">desativada</b>'}.</p>
+        <p class="fine">${S.user.twofa ? 'Ao entrar, além da senha, você digita o código do app autenticador. Transferências, saques e chaves de API também pedem o código.' : 'Com ela, um código do app autenticador é pedido a cada login e a cada transferência ou saque.'}</p>
+        <div class="actions">${S.user.twofa ? '<button class="btn btn-ghost" id="tf-off">Desativar</button>' : '<button class="btn" id="tf-on">Ativar verificação em duas etapas</button>'}</div></section>`;
+    $('#senha', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { await post('account', formObj(e.target)); e.target.reset(); toast('Senha alterada.'); }); };
+    const on = $('#tf-on', el); if (on) on.onclick = () => run(on, twofaSetup);
+    const off = $('#tf-off', el);
+    if (off) off.onclick = () => {
+      const m = openModal(`<form class="stack"><h3>Desativar verificação em duas etapas</h3><label>Senha<input type="password" name="password" autocomplete="current-password" required></label><label>Código do app (ou de recuperação)<input name="code" inputmode="numeric" autocomplete="one-time-code" required></label><div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-danger">Desativar</button></div></form>`);
+      $('form', m.el).onsubmit = (e) => { e.preventDefault(); run($('.btn-danger', e.target), async () => { S.user = (await post('account/2fa/disable', formObj(e.target))).user; m.close(); toast('Verificação em duas etapas desativada.'); render(); }); };
+    };
+  };
+
+  acctTabs.api = async (el, reload) => {
+    const { keys, scopes } = await api('account/api'), base = `${location.origin}/api/v1`;
+    const ex = (m, p, body) => `curl ${m === 'POST' ? '-X POST ' : ''}"${base}${p}" \\\n  -H "Authorization: Bearer cdk_SUA_CHAVE"${body ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '${body}'` : ''}`;
+    const docs = [['GET', '/saldo', 'leitura', 'Saldo atual da carteira.', ex('GET', '/saldo')], ['GET', '/extrato?pagina=0', 'leitura', 'Movimentações, 30 por página, da mais recente para a mais antiga.', ex('GET', '/extrato?pagina=0')],
+      ['POST', '/recarga', 'recarga', 'Gera um PIX para recarregar a carteira. O saldo entra sozinho quando o PIX é pago.', ex('POST', '/recarga', '{"valor": 25.50, "cpf": "000.000.000-00"}')], ['GET', '/recarga?id=ID', 'recarga', 'Consulta o estado de uma recarga (pendente, pago, expirado, cancelado).', ex('GET', '/recarga?id=ID')],
+      ['POST', '/transferir', 'transferencia', 'Transfere saldo para outra conta pelo e-mail. As taxas de envio e recebimento valem como no site.', ex('POST', '/transferir', '{"para": "cliente@email.com", "valor": 10, "nota": "pagamento"}')]];
+    el.innerHTML = `${acctHead('Chaves de API', 'Use a sua carteira em sistemas e bots, sem abrir o site.')}
+      <section class="panel"><h3>Suas chaves</h3>${keys.length ? `<div class="tablewrap"><table class="tbl"><thead><tr><th>Nome</th><th>Chave</th><th>Permissões</th><th>Criada</th><th>Último uso</th><th></th></tr></thead><tbody>${keys.map((k) => `<tr><td>${esc(k.name)}</td><td><code>${esc(k.prefix)}…</code></td><td>${k.scopes.map((s) => `<span class="mv">${esc(s)}</span>`).join(' ')}</td><td class="nowrap">${dt(k.createdAt)}</td><td class="nowrap">${k.lastUsed ? dt(k.lastUsed) : 'nunca'}</td><td><button class="btn btn-danger btn-small" data-rev="${esc(k.id)}">Revogar</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Você ainda não criou nenhuma chave.</p>'}</section>
+      <section class="panel"><h3>Criar chave</h3><form id="nk" class="stack"><label>Nome (para você lembrar onde usa)<input name="name" maxlength="40" placeholder="Meu bot"></label>
+        <fieldset class="fieldset"><legend>Permissões</legend>${Object.entries(scopes).map(([k, n]) => `<label class="check"><input type="checkbox" name="s_${esc(k)}" ${k === 'leitura' ? 'checked' : ''}> <span><b>${esc(k)}</b>: ${esc(n)}</span></label>`).join('')}</fieldset>
+        <p class="fine">Dê só o que o sistema precisa. Quem tem uma chave com <b>transferencia</b> move o seu saldo sem pedir senha: guarde como uma senha. A chave aparece uma única vez.</p>${secFields()}<div class="actions"><button class="btn">Criar chave</button></div></form></section>
+      <section class="panel"><h3>Como usar</h3><p>Base: <code>${esc(base)}</code>. Envie a chave no cabeçalho <code>Authorization: Bearer cdk_...</code>. Valores em <b>reais</b> (<code>10.50</code> ou <code>"10,50"</code>). Limite de 60 chamadas por minuto por chave. Erros voltam como <code>{"error": "mensagem"}</code>.</p>
+        ${docs.map(([m, p, s, d, c]) => `<div class="apidoc"><div><span class="mv mv-${m === 'GET' ? 'recebido' : 'envio'}">${m}</span> <code>${esc(p)}</code> <span class="muted">· permissão: ${esc(s)}</span></div><p class="fine">${esc(d)}</p><pre class="delivery-text">${esc(c)}</pre></div>`).join('')}</section>`;
+    $$('[data-rev]', el).forEach((b) => { b.onclick = async () => { if (await confirmBox('Revogar chave?', 'Quem usa essa chave perde o acesso na hora. Isso não dá para desfazer.', { danger: true, ok: 'Revogar' })) run(b, async () => { await post('account/api/revoke', { id: b.dataset.rev }); toast('Chave revogada.'); reload(); }); }; });
+    $('#nk', el).onsubmit = (e) => {
+      e.preventDefault();
+      const o = formObj(e.target);
+      run($('button', e.target), async () => {
+        const r = await post('account/api/create', { name: o.name, scopes: Object.keys(scopes).filter((k) => o['s_' + k]), password: o.password, code: o.code });
+        openModal(`<h3>Copie a sua chave agora</h3><p>Ela não aparece de novo. Se perder, revogue e crie outra.</p><code class="key">${esc(r.secret)}</code><div class="modal-actions"><button class="btn btn-ghost" data-act="copy" data-copy="${esc(r.secret)}">Copiar</button><button class="btn" data-close>Já guardei</button></div>`);
+        reload();
+      });
     };
   };
 
@@ -470,7 +676,7 @@
       title: `Pedido ${o.code}`, html: `<div class="page narrow"><nav class="crumbs"><a href="#/conta">Minha conta</a><span>${esc(o.code)}</span></nav>
         <header class="page-head"><h1>Pedido ${esc(o.code)}</h1>${badge(o.status)}</header>
         <section class="section">${o.lines.map((l) => `<div class="sum"><div><strong>${esc(l.name)}</strong><span class="muted">${esc(l.catName)} · ${l.qty} un. × ${brl(l.unit)}</span></div><b>${brl(l.unit * l.qty)}</b></div>`).join('')}
-          ${o.discount ? `<div class="sum"><span>Cupom ${esc(o.coupon)}</span><b>-${brl(o.discount)}</b></div>` : ''}<div class="sum total"><span>Total</span><b>${brl(o.total)}</b></div><p class="fine">Criado em ${dt(o.createdAt)}</p></section>
+          ${o.discount ? `<div class="sum"><span>Cupom ${esc(o.coupon)}</span><b>-${brl(o.discount)}</b></div>` : ''}<div class="sum total"><span>Total</span><b>${brl(o.total)}</b></div><p class="fine">Criado em ${dt(o.createdAt)}${o.paidWith === 'wallet' ? ' · Pago com o saldo da carteira' : ''}</p></section>
         ${payHtml}${paid ? o.lines.map((l, i) => `<section class="section"><h2>${o.lines.length > 1 ? esc(l.name) : 'Sua entrega'}</h2>${lineDelivery(o, l, i, paid)}</section>`).join('') : ''}
         ${msg ? `<section class="section"><p>${esc(msg)}</p></section>` : ''}
         ${paid ? `<p class="fine"><a href="#/suporte?pedido=${esc(o.id)}">Tive um problema com este pedido</a></p>` : ''}${supportLinks()}</div>`,
@@ -580,7 +786,7 @@
      PAINEL ADMIN (#/admin/<aba>)
      ==================================================================== */
   // [id, nome, permissão da equipe]. null = só administrador.
-  const TABS = [['geral', 'Visão geral', null], ['relatorios', 'Relatórios', null], ['pedidos', 'Pedidos', 'pedidos'], ['produtos', 'Produtos', 'produtos'], ['estoque', 'Estoque', 'estoque,produtos'], ['categorias', 'Categorias', null], ['usuarios', 'Usuários', null], ['cupons', 'Cupons e afiliados', 'cupons'], ['avaliacoes', 'Avaliações', 'avaliacoes'], ['tickets', 'Tickets', 'tickets'], ['portfolio', 'Portfólio', 'portfolio'], ['mensagens', 'Orçamentos', 'mensagens'], ['paginas', 'Páginas', null], ['config', 'Configurações', null], ['logs', 'Registros', null], ['backup', 'Backup', null]];
+  const TABS = [['geral', 'Visão geral', null], ['relatorios', 'Relatórios', null], ['pedidos', 'Pedidos', 'pedidos'], ['produtos', 'Produtos', 'produtos'], ['estoque', 'Estoque', 'estoque,produtos'], ['categorias', 'Categorias', null], ['usuarios', 'Usuários', null], ['carteiras', 'Carteiras', null], ['cupons', 'Cupons e afiliados', 'cupons'], ['avaliacoes', 'Avaliações', 'avaliacoes'], ['tickets', 'Tickets', 'tickets'], ['portfolio', 'Portfólio', 'portfolio'], ['mensagens', 'Orçamentos', 'mensagens'], ['paginas', 'Páginas', null], ['config', 'Configurações', null], ['logs', 'Registros', null], ['backup', 'Backup', null]];
   const PERMS = [['pedidos', 'Pedidos (ver, entregar, notas)'], ['tickets', 'Tickets e reposições'], ['mensagens', 'Orçamentos e mensagens'], ['estoque', 'Estoque'], ['produtos', 'Produtos'], ['cupons', 'Cupons e afiliados'], ['portfolio', 'Portfólio'], ['avaliacoes', 'Avaliações']];
   const tabOk = (t) => (t[2] === null ? S.user.role === 'admin' : can(t[2]));
   const tabs = {};
@@ -991,8 +1197,8 @@
   /* ---------- Configurações ---------- */
   tabs.config = async (el) => {
     const { config: c } = await api('admin/settings');
-    const ck = (v) => (v ? 'checked' : ''), ct = c.contacts || {}, nt = c.notify || {};
-    const ev = [['paid', 'Pedido pago'], ['attention', 'Pedido que precisa de atenção (valor errado, reembolso)'], ['lowstock', 'Estoque baixo ou esgotado'], ['ticket', 'Novo ticket, reposição ou mensagem de cliente'], ['contact', 'Novo pedido de orçamento (portfólio)'], ['review', 'Nova avaliação'], ['neworder', 'Novo pedido criado (aguardando PIX)']];
+    const ck = (v) => (v ? 'checked' : ''), ct = c.contacts || {}, nt = c.notify || {}, wl = c.wallet;
+    const ev = [['paid', 'Pedido pago'], ['attention', 'Pedido que precisa de atenção (valor errado, reembolso)'], ['lowstock', 'Estoque baixo ou esgotado'], ['ticket', 'Novo ticket, reposição ou mensagem de cliente'], ['contact', 'Novo pedido de orçamento (portfólio)'], ['review', 'Nova avaliação'], ['neworder', 'Novo pedido criado (aguardando PIX)'], ['withdraw', 'Novo pedido de saque da carteira']];
     el.innerHTML = `${head('Configurações')}<form id="cfg" class="stack">
       <div class="panel"><h3>Loja</h3><label>Nome da loja<input name="storeName" value="${esc(c.storeName)}" maxlength="40"></label>
         ${SECS.map((s) => `<div class="grid2"><label>Nome da parte “${s}”<input name="n_${s}" value="${esc(c.sections[s].name)}" maxlength="30"></label><label>Frase de apoio<input name="t_${s}" value="${esc(c.sections[s].tagline)}" maxlength="160"></label></div>`).join('')}</div>
@@ -1003,6 +1209,16 @@
         <label>Endereço do webhook<input name="n_webhook" value="${esc(nt.webhook || '')}" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"></label>
         <div class="checks">${ev.map(([k, n]) => `<label class="check"><input type="checkbox" name="nv_${k}" ${ck(nt[k])}> ${n}</label>`).join('')}</div><div class="actions"><button type="button" class="btn btn-ghost btn-small" id="dtest">Salvar e enviar teste</button></div></div>
       <div class="panel"><h3>Downloads de arquivos</h3><p class="fine">Vale para produtos entregues por link. 0 = sem limite. O endereço real do arquivo nunca aparece na página do cliente, mas quem baixa consegue ver o destino: para proteção total, hospede em armazenamento privado.</p><div class="grid2"><label>Prazo para baixar (dias)<input type="number" name="d_days" min="0" max="3650" value="${c.download.days}"></label><label>Máximo de downloads por pedido<input type="number" name="d_max" min="0" max="1000" value="${c.download.max}"></label></div></div>
+      <div class="panel"><h3>Carteira</h3><p class="fine">Valores em reais. Transferir: quem envia paga o valor + a taxa de envio; quem recebe leva o valor - a taxa de recebimento. Sacar: o cliente pede um valor, desconta-se % + taxa fixa e o resto cai no PIX. Todo cliente vê estas tarifas na página Carteira.</p>
+        <label class="check"><input type="checkbox" name="w_enabled" ${ck(wl.enabled)}> Carteira ligada (recarga, saldo em compras, transferência e saque)</label>
+        <div class="grid2"><label>Taxa de envio da transferência (R$)<input name="w_transferFee" inputmode="decimal" value="${fromCents(wl.transferFee) || '0,00'}"></label><label>Taxa de recebimento da transferência (R$)<input name="w_receiveFee" inputmode="decimal" value="${fromCents(wl.receiveFee) || '0,00'}"></label>
+          <label>Taxa do saque (%)<input name="w_withdrawPct" inputmode="decimal" value="${esc(String(wl.withdrawPct).replace('.', ','))}"></label><label>Taxa fixa do saque (R$)<input name="w_withdrawFixed" inputmode="decimal" value="${fromCents(wl.withdrawFixed) || '0,00'}"></label>
+          <label>Taxa de recarga (R$)<input name="w_depositFee" inputmode="decimal" value="${fromCents(wl.depositFee) || '0,00'}"></label><label>Recarga mínima (R$)<input name="w_minDeposit" inputmode="decimal" value="${fromCents(wl.minDeposit)}"></label>
+          <label>Recarga máxima (R$)<input name="w_maxDeposit" inputmode="decimal" value="${fromCents(wl.maxDeposit)}"></label><label>Transferência mínima (R$)<input name="w_minTransfer" inputmode="decimal" value="${fromCents(wl.minTransfer)}"></label>
+          <label>Saque mínimo (R$)<input name="w_minWithdraw" inputmode="decimal" value="${fromCents(wl.minWithdraw)}"></label><label>Limite de saque por cliente por dia (R$, 0 = sem limite)<input name="w_dailyWithdrawMax" inputmode="decimal" value="${fromCents(wl.dailyWithdrawMax) || '0,00'}"></label></div>
+        <label>Envio dos saques<select name="w_withdrawMode"><option value="manual" ${wl.withdrawMode === 'manual' ? 'selected' : ''}>Manual: eu aprovo cada saque em Carteiras (mais seguro)</option><option value="auto" ${wl.withdrawMode === 'auto' ? 'selected' : ''}>Automático: o PIX sai na hora pela MisticPay</option></select></label>
+        <label class="check"><input type="checkbox" name="w_apiEnabled" ${ck(wl.apiEnabled)}> API pública ligada (os clientes criam chaves em Minha conta)</label>
+        <p class="fine">Saque automático e manual exigem que a chave da MisticPay tenha a permissão de saque. Antes de ligar o automático, faça um saque de teste de valor baixo.</p></div>
       <div class="panel"><h3>Regras da loja</h3><div class="grid2"><label>Tempo de reserva do pedido (minutos)<input type="number" name="reserveMinutes" min="5" max="1440" value="${c.reserveMinutes}"></label><label>Avisar estoque baixo a partir de<input type="number" name="lowStock" min="0" value="${c.lowStock}"></label></div>
         <label class="check"><input type="checkbox" name="registrationOpen" ${ck(c.registrationOpen)}> Permitir novos cadastros</label><label class="check"><input type="checkbox" name="maintenance" ${ck(c.maintenance)}> Modo manutenção (fecha a loja para clientes; admins continuam comprando e testando)</label></div>
       <button class="btn">Salvar configurações</button></form>`;
@@ -1010,11 +1226,62 @@
       const o = formObj(f), sections = {}, notify = { webhook: o.n_webhook };
       SECS.forEach((s) => { sections[s] = { name: o['n_' + s], tagline: o['t_' + s] }; });
       ev.forEach(([k]) => { notify[k] = o['nv_' + k]; });
-      return { storeName: o.storeName, sections, announcement: { active: o.a_active, tone: o.a_tone, text: o.a_text }, pix: { instructions: o.p_instructions }, contacts: { discord: o.c_discord, whatsapp: o.c_whatsapp, email: o.c_email }, notify, download: { days: o.d_days, max: o.d_max }, reserveMinutes: o.reserveMinutes, lowStock: o.lowStock, registrationOpen: o.registrationOpen, maintenance: o.maintenance };
+      const wallet = { enabled: o.w_enabled, transferFee: toCents(o.w_transferFee), receiveFee: toCents(o.w_receiveFee), withdrawPct: o.w_withdrawPct, withdrawFixed: toCents(o.w_withdrawFixed), depositFee: toCents(o.w_depositFee), minDeposit: toCents(o.w_minDeposit), maxDeposit: toCents(o.w_maxDeposit), minTransfer: toCents(o.w_minTransfer), minWithdraw: toCents(o.w_minWithdraw), dailyWithdrawMax: toCents(o.w_dailyWithdrawMax), withdrawMode: o.w_withdrawMode, apiEnabled: o.w_apiEnabled };
+      return { wallet, storeName: o.storeName, sections, announcement: { active: o.a_active, tone: o.a_tone, text: o.a_text }, pix: { instructions: o.p_instructions }, contacts: { discord: o.c_discord, whatsapp: o.c_whatsapp, email: o.c_email }, notify, download: { days: o.d_days, max: o.d_max }, reserveMinutes: o.reserveMinutes, lowStock: o.lowStock, registrationOpen: o.registrationOpen, maintenance: o.maintenance };
     };
     const f = $('#cfg', el);
     f.onsubmit = (e) => { e.preventDefault(); run($('button:not(.btn-ghost)', e.target), async () => { await post('admin/settings/save', collect(f)); await boot(); updateChrome('admin'); toast('Configurações salvas.'); }); };
     $('#dtest', el).onclick = (e) => run(e.target, async () => { await post('admin/settings/save', collect(f)); await post('admin/discord/test'); toast('Teste enviado. Confira o canal no Discord.'); });
+  };
+
+  /* ---------- Carteiras ---------- */
+  const securityPrompt = (title, text, ok, o = {}) => new Promise((res) => {
+    const m = openModal(`<form class="stack"><h3>${esc(title)}</h3><p class="muted">${esc(text)}</p>${o.extra || ''}${secFields()}<div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancelar</button><button class="btn ${o.danger ? 'btn-danger' : ''}">${esc(ok)}</button></div></form>`);
+    let done = false;
+    $('form', m.el).onsubmit = (e) => { e.preventDefault(); done = true; const v = formObj(e.target); m.close(); res(v); };
+    new MutationObserver((_, ob) => { if (!m.el.isConnected) { ob.disconnect(); if (!done) res(null); } }).observe($('#modal-root'), { childList: true });
+  });
+  const AWST = { pendente: 'Aguardando', enviando: 'Na fila da MisticPay', verificar: 'Conferir na MisticPay', enviado: 'Enviado', recusado: 'Recusado', falhou: 'Falhou (devolvido)' };
+  tabs.carteiras = async (el, reload) => {
+    const d = await api('admin/wallet'), t = d.totals;
+    const row = (x, acts) => `<tr><td class="nowrap">${dt(x.createdAt)}</td><td>${esc(x.userName)}<br><span class="muted">${esc(x.userEmail)}</span></td><td>${brl(x.amount)}</td><td>${brl(x.fee)}</td><td><b>${brl(x.net)}</b></td><td><code>${esc(x.keyType)}</code> ${esc(x.key)}</td><td><span class="st st-${x.status === 'verificar' ? 'pendente' : esc(x.status)}">${esc(AWST[x.status] || x.status)}</span>${x.reason ? `<br><span class="muted">${esc(x.reason)}</span>` : ''}</td>${acts === undefined ? '' : `<td class="nowrap">${acts}</td>`}</tr>`;
+    const acts = (x) => (x.status === 'pendente' ? `<button class="btn btn-small" data-a="approve" data-id="${esc(x.id)}">Aprovar e enviar PIX</button> <button class="btn btn-ghost btn-small" data-a="reject" data-id="${esc(x.id)}">Recusar</button>`
+      : x.status === 'enviando' ? `<button class="btn btn-ghost btn-small" data-a="check" data-id="${esc(x.id)}">Conferir agora</button>`
+      : `<button class="btn btn-small" data-a="approve" data-id="${esc(x.id)}">Tentar de novo (seguro)</button> <button class="btn btn-ghost btn-small" data-a="sent" data-id="${esc(x.id)}">Marcar como enviado</button> <button class="btn btn-ghost btn-small" data-a="refund" data-id="${esc(x.id)}">Estornar</button>`);
+    const th = (a) => `<thead><tr><th>Data</th><th>Cliente</th><th>Valor</th><th>Taxa</th><th>PIX líquido</th><th>Chave</th><th>Estado</th>${a ? '<th></th>' : ''}</tr></thead>`;
+    el.innerHTML = `${head('Carteiras')}
+      <div class="kpis">${kpi('Saldo nas carteiras', brl(t.total), `${pl(t.holders, 'cliente com saldo', 'clientes com saldo')}`)}${t.mistic == null ? '' : kpi('Saldo na MisticPay', brl(t.mistic), t.mistic < t.total + t.pendingAmount ? 'abaixo do que os clientes têm: atenção' : 'cobre as carteiras e saques')}${kpi('Taxas arrecadadas', brl(t.fees), 'transferências e saques concluídos')}${kpi('Saques aguardando', t.pending, brl(t.pendingAmount))}${kpi('Saques enviados', t.sent, brl(t.sentAmount))}</div>
+      <p class="notice">O saldo das carteiras é dinheiro de clientes que já está na sua conta MisticPay. Mantenha na MisticPay pelo menos esse valor para conseguir pagar os saques.</p>
+      <div class="panel"><h3>Saques para analisar</h3>${d.open.length ? `<div class="tablewrap"><table class="tbl">${th(true)}<tbody>${d.open.map((x) => row(x, acts(x))).join('')}</tbody></table></div><p class="fine">Aprovar entrega o PIX à MisticPay (pede a sua senha); ele entra na fila deles e vira “Enviado” sozinho quando concluir. “Conferir na MisticPay” significa resposta incerta: tentar de novo é seguro (não duplica o PIX), ou confira no painel deles e marque como enviado ou estorne.</p>` : '<p class="muted">Nenhum saque aguardando.</p>'}</div>
+      <div class="panel"><h3>Buscar carteira de um cliente</h3><form id="bs" class="inline"><input name="q" placeholder="Nome ou e-mail" required><button class="btn btn-small">Buscar</button></form><div id="bres"></div></div>
+      <div class="panel"><h3>Últimos saques tratados</h3>${d.recent.length ? `<div class="tablewrap"><table class="tbl">${th(false)}<tbody>${d.recent.map((x) => row(x)).join('')}</tbody></table></div>` : '<p class="muted">Ainda não há saques tratados.</p>'}</div>`;
+    $$('[data-a]', el).forEach((b) => {
+      b.onclick = async () => {
+        const a = b.dataset.a, id = b.dataset.id, x = [...d.open].find((y) => y.id === id);
+        const act = (body) => run(b, async () => { const r = await post('admin/wallet/withdraw', { id, action: a, ...body }); toast({ enviando: 'PIX na fila da MisticPay. O estado atualiza sozinho.', enviado: 'PIX concluído.', recusado: 'Saque recusado e valor devolvido.', falhou: 'Não saiu: valor devolvido ao cliente.', verificar: 'Resposta incerta: confira na MisticPay.' }[r.withdrawal.status] || 'Feito.', r.withdrawal.status === 'verificar' ? 'err' : 'ok'); reload(); });
+        if (a === 'check') act({});
+        else if (a === 'approve') { const v = await securityPrompt('Enviar PIX', `Enviar ${brl(x.net)} para ${x.keyType} ${x.key} (${x.userName})?`, 'Enviar PIX'); if (v) act(v); }
+        else if (a === 'sent') { const v = await securityPrompt('Marcar como enviado', 'Confirme que você viu o PIX saindo no painel da MisticPay.', 'Marcar como enviado'); if (v) act(v); }
+        else if (a === 'refund') { const v = await securityPrompt('Estornar saque', `Confirme que o PIX NÃO saiu. ${brl(x.amount)} voltam para a carteira do cliente.`, 'Estornar', { danger: true }); if (v) act({ ...v, reason: 'PIX não saiu' }); }
+        else { const why = await promptBox('Recusar saque', 'Motivo (o cliente vê)', { required: true, ok: 'Recusar', danger: true }); if (why) act({ reason: why }); }
+      };
+    });
+    const show = async (id) => {
+      const u = await api('admin/wallet/user', { query: { id } }), box = $('#bres', el);
+      box.innerHTML = `<h4>${esc(u.user.name)} <span class="muted">${esc(u.user.email)}</span></h4><p>Saldo: <b class="wbal sm">${brl(u.balance)}</b></p>
+        <form id="aj" class="grid2"><label>Tipo<select name="kind"><option value="credit">Creditar</option><option value="debit">Debitar</option></select></label><label>Valor (R$)<input name="amount" inputmode="decimal" required></label><label class="full">Motivo (aparece no extrato do cliente)<input name="reason" maxlength="120" required></label><div class="full actions"><button class="btn btn-small">Ajustar saldo</button></div></form>
+        ${ledgerTable(u.ledger)}`;
+      $('#aj', box).onsubmit = async (e) => {
+        e.preventDefault(); const f = e.target, kind = f.kind.value, amount = toCents(f.amount.value);
+        const v = await securityPrompt('Ajustar saldo', `${kind === 'credit' ? 'Creditar' : 'Debitar'} ${brl(amount)} em ${u.user.name}. Fica registrado.`, 'Confirmar ajuste', { danger: kind === 'debit' });
+        if (v) run($('button', f), async () => { await post('admin/wallet/adjust', { userId: id, kind, amount, reason: f.reason.value, password: v.password, code: v.code }); toast('Saldo ajustado.'); show(id); });
+      };
+    };
+    $('#bs', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => {
+      const { users } = await api('admin/wallet/search', { query: { q: e.target.q.value } });
+      $('#bres', el).innerHTML = users.length ? `<ul class="rows">${users.map((u) => `<li><span>${esc(u.name)} <em>${esc(u.email)}</em></span><span><b>${brl(u.balance)}</b> <button class="btn btn-ghost btn-small" data-u="${esc(u.id)}">Abrir</button></span></li>`).join('')}</ul>` : '<p class="muted">Ninguém encontrado.</p>';
+      $$('[data-u]', el).forEach((b) => { b.onclick = () => run(b, () => show(b.dataset.u)); });
+    }); };
   };
 
   /* ---------- Registros ---------- */

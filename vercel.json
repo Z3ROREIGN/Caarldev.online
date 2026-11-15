@@ -50,6 +50,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/v1/:path*",
+      "destination": "/api/store?r=v1/:path*"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/seo?t=sitemap"
     },

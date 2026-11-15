@@ -112,3 +112,60 @@ npm test         # testes automáticos da loja e do pagamento (MisticPay simulad
 ## Dica de desempenho
 
 O fundo agora é um vídeo de ~300 KB (`assets/fundo.webm`/`.mp4`). O arquivo `fundo.gif` original foi removido do projeto: se quiser trocar o fundo, converta o novo GIF com `ffmpeg -i fundo.gif -c:v libvpx-vp9 -crf 38 -an assets/fundo.webm`.
+
+## Carteira e API (Minha conta)
+
+**Minha conta** agora é uma área com seções: Visão geral, **Carteira**, Pedidos, Favoritos, Segurança, **Chaves de API** e Perfil. O saldo aparece no menu do topo.
+
+### O que o cliente faz na carteira
+
+| Ação | Como funciona | Tarifa (padrão) |
+|---|---|---|
+| **Recarregar** | Gera um PIX pela MisticPay (pede o CPF, que não é guardado). Quando o PIX é pago, o saldo entra sozinho (webhook ou a própria página confere). | sem taxa |
+| **Pagar compras** | No carrinho e na página do produto, escolha "Saldo da carteira". A entrega sai na hora, sem CPF. | sem taxa |
+| **Transferir** | Pelo e-mail da outra conta. Pede a senha (e o código do 2FA, se ativo). Quem envia paga **valor + R$ 0,50**; quem recebe leva **valor - R$ 0,50**. | R$ 0,50 + R$ 0,50 |
+| **Sacar** | PIX para uma chave do cliente (CPF, CNPJ, e-mail, telefone ou aleatória). Sai do saldo o valor pedido; no PIX chega o valor menos **5% + R$ 0,50**. | 5% + R$ 0,50 |
+
+Exemplos: transferir R$ 10,00 → o remetente perde R$ 10,50 e o destinatário recebe R$ 9,50 (a loja fica com R$ 1,00). Sacar R$ 20,00 → taxa R$ 1,50 → chegam R$ 18,50 no PIX.
+
+Todas as tarifas, mínimos, limite de saque por dia e o modo de saque mudam em **Painel → Configurações → Carteira**.
+
+### Saques: você aprova (padrão) ou automático
+
+O saque usa `POST /api/transactions/withdraw` da MisticPay, o mesmo cliente (`lib/misticpay.js`) e a mesma chave das cobranças.
+
+- **Manual (padrão):** o saque cai em **Painel → Carteiras**; você confere e clica **Aprovar e enviar PIX** (pede a sua senha). **Recusar** devolve o valor ao cliente.
+- **Automático:** o PIX é pedido à MisticPay na hora. Se a conta MisticPay da loja estiver sem saldo, o pedido não se perde: fica pendente e você recebe um aviso.
+- **O saque entra numa fila.** A MisticPay responde `QUEUED`: o pedido vira **Na fila da MisticPay** e só passa a **Enviado** quando ela conclui (webhook `RETIRADA` ou o botão "Conferir agora"; o site sempre confirma com `/transactions/check`, nunca confia no corpo do webhook). Se a MisticPay marcar `FALHA`, ou o banco de destino **devolver** o PIX, o valor volta sozinho para a carteira do cliente e a taxa é desfeita.
+- **Nunca duplica PIX:** cada saque vai com um `X-Idempotency-Key` próprio. Se a resposta ficar incerta (queda de rede, erro 500) o saque vai para **Conferir na MisticPay** e **Tentar de novo** é seguro. Também dá para marcar como enviado ou estornar.
+- Recusa de dados pela MisticPay (chave PIX inválida, valor...) devolve o saldo na hora.
+- **Chave de acesso:** além de `TRANSACTION_CREATE` e `TRANSACTION_READ`, crie a chave com o escopo **`WITHDRAW_CREATE`**. Marque também **`BALANCE_READ`** (opcional) para ver o saldo da MisticPay no painel Carteiras. O escopo não pode ser editado depois: é preciso criar outra chave e trocar as variáveis na Vercel.
+- **IPs autorizados:** se você restringiu a conta por IP na MisticPay (API → IPs autorizados), os saques e consultas vindos da Vercel recebem `401`, porque os IPs da Vercel mudam. Deixe a lista vazia.
+- A MisticPay cobra a taxa dela em cada saque. Confira que os 5% + R$ 0,50 do cliente cobrem essa taxa. Não há ambiente de teste: faça os primeiros saques com valor baixo.
+- O saldo das carteiras é dinheiro de clientes que está na sua conta MisticPay: mantenha lá pelo menos esse valor para conseguir pagar os saques.
+
+### Painel → Carteiras
+
+Saldo total nas carteiras, taxas arrecadadas, saques para analisar e já tratados, busca por cliente e **ajuste manual de saldo** (crédito ou débito, com motivo que aparece no extrato do cliente; pede a sua senha). Não dá para apagar uma conta que ainda tem saldo. Reembolsar um pedido pago com saldo devolve o valor à carteira do cliente sozinho.
+
+### API pública
+
+Em **Minha conta → Chaves de API** o cliente cria chaves (até 5) com permissões separadas: `leitura`, `recarga`, `transferencia`. A chave aparece uma vez, só o hash fica guardado, e pode ser revogada a qualquer momento. Envie `Authorization: Bearer cdk_...`. Valores em **reais**. Limite de 60 chamadas por minuto por chave. Dá para desligar tudo em Configurações → Carteira.
+
+| Método e rota | Permissão | O que faz |
+|---|---|---|
+| `GET /api/v1/saldo` | leitura | saldo atual |
+| `GET /api/v1/extrato?pagina=0` | leitura | movimentações (30 por página) |
+| `POST /api/v1/recarga` `{"valor": 25.5, "cpf": "..."}` | recarga | gera PIX de recarga |
+| `GET /api/v1/recarga?id=...` | recarga | estado da recarga |
+| `POST /api/v1/transferir` `{"para": "email", "valor": 10, "nota": "..."}` | transferencia | transfere (com as mesmas taxas) |
+
+```
+curl "https://seusite.com/api/v1/saldo" -H "Authorization: Bearer cdk_SUA_CHAVE"
+```
+
+A API roda dentro de `api/store.js` (rewrite `/api/v1/*` no `vercel.json`), então o número de funções do Vercel não muda.
+
+### Segurança da carteira
+
+O saldo é um número inteiro no Redis alterado só com operações atômicas (`INCRBY`/`DECRBY`): pedidos simultâneos nunca gastam mais que o saldo. Recarga só credita depois de a MisticPay confirmar o PIX (o corpo do webhook nunca é confiado) e só uma vez. Transferência, saque e criação de chave pedem a senha e, com 2FA ativo, o código. Há limite de tentativas em tudo, e o backup do painel inclui os saldos.

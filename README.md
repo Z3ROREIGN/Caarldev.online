@@ -1,6 +1,6 @@
 # Caarldev: loja + portfólio (Vercel)
 
-Site estático (`index.html`, `app.js`) com API em funções do Vercel. Pagamento por **PIX automático via MisticPay** (https://docs.misticpay.com). Guia completo de instalação e uso em **LOJA.md**; relay Wine em **LEIA-ME.md**.
+Site estático (`index.html`, `app.js`) com API em funções do Vercel. Pagamento por **PIX automático via MisticPay** (https://docs.misticpay.com). Inclui **carteira** (recarga por PIX, saldo nas compras, transferência e saque) e API pública com chaves. Guia completo de instalação e uso em **LOJA.md**; relay Wine em **LEIA-ME.md**.
 
 ## Rotas
 - `GET|POST /api/store?r=<rota>`: API da loja (contas, produtos, pedidos, painel admin).
@@ -10,7 +10,7 @@ Site estático (`index.html`, `app.js`) com API em funções do Vercel. Pagament
 ## Variáveis de ambiente (Vercel)
 | Variável | Para quê |
 |---|---|
-| `MISTICPAY_CLIENT_ID`, `MISTICPAY_CLIENT_SECRET` | Chave de acesso da MisticPay (`pk_`/`sk_`) com escopos `TRANSACTION_CREATE` e `TRANSACTION_READ` |
+| `MISTICPAY_CLIENT_ID`, `MISTICPAY_CLIENT_SECRET` | Chave de acesso da MisticPay (`pk_`/`sk_`) com escopos `TRANSACTION_CREATE` e `TRANSACTION_READ` (e `WITHDRAW_CREATE` para os saques da carteira; `BALANCE_READ` é opcional) |
 | `ADMIN_EMAIL`, `SESSION_SECRET` | Admin e assinatura do login |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Redis (Upstash) |
 | `SITE_URL` (opcional) | Endereço público, se o domínio do webhook sair errado |
