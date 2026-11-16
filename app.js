@@ -102,17 +102,23 @@
   /* ---------- Estado e navegação ---------- */
   async function boot() {
     const b = await api('bootstrap');
-    S.user = b.user; S.config = b.config; S.cats = b.categories; S.banned = b.banned; S.wishBack = b.wishBack || 0; S.balance = b.balance || 0; S.loaded = true;
+    S.user = b.user; S.config = b.config; S.cats = b.categories; S.banned = b.banned; S.wishBack = b.wishBack || 0; S.balance = b.balance || 0; S.discordLink = !!b.discordLink; S.loaded = true;
   }
   const hasOutros = () => S.cats.some((c) => c.section === 'outros');
   const IC = {
-    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>', discord: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
-    roblox: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 12v3M5.5 13.5h3M16 12.5h.01M18.5 14.5h.01"/>',
+    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+    // "F:" = logo preenchido (marcas); o resto é traço fino
+    discord: 'F:<path fill-rule="evenodd" d="M19.6 5.3A16.5 16.5 0 0 0 15.5 4l-.5 1a15.300 15.300 0 0 0-6 0l-.5-1A16.500 16.500 0 0 0 4.400 5.300C1.800 9.200 1.100 13 1.400 16.700a16.700 16.700 0 0 0 5.100 2.600l1.100-1.800a10.800 10.800 0 0 1-1.700-.8l.4-.3a11.800 11.800 0 0 0 10.200 0l.4.300c-.5.300-1.100.6-1.700.8l1.100 1.800a16.700 16.700 0 0 0 5.100-2.600c.4-4.300-.7-8.100-3-11.400zM8.700 14.500c-1 0-1.800-.9-1.800-2s.8-2 1.800-2 1.800.9 1.800 2-.8 2-1.800 2zm6.600 0c-1 0-1.800-.9-1.800-2s.8-2 1.800-2 1.800.9 1.800 2-.8 2-1.800 2z"/>',
+    roblox: 'F:<path fill-rule="evenodd" d="M5.200 1.100 1.100 18.800l17.700 4.100L22.900 5.200zM10.100 9.400l4.500 1.100-1.100 4.500-4.500-1.100z"/>',
     outros: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     portfolio: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-9 9"/>',
     cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.5 12h11L21 7H6"/>',
     star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
-    support: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M5.6 5.6l3.9 3.9M14.5 14.5l3.9 3.9M18.4 5.6l-3.9 3.9M9.5 14.5l-3.9 3.9"/>',
+    support: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/><path d="M19 20a4 4 0 0 1-4 2h-2"/>',
+    award: '<circle cx="12" cy="9" r="6"/><path d="M8.600 14.300 7 22l5-3 5 3-1.600-7.700"/><path d="M9.300 9.100l1.900 1.900 3.500-3.600"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.700 0l3-3a4 4 0 0 0-5.700-5.700l-1 1"/><path d="M14 10a4 4 0 0 0-5.700 0l-3 3A4 4 0 0 0 11 18.700l1-1"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     faq: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>',
     overview: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
     wallet: '<path d="M4 7a2 2 0 0 1 2-2h12v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><path d="M16 14.5h.01"/>',
@@ -121,7 +127,11 @@
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', panel: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   };
-  const ico = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
+  const ico = (n, s = 20) => { const d = IC[n] || '', f = d.startsWith('F:'); return f ? `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${d.slice(2)}</svg>` : `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`; };
+  // Foto do Discord quando a conta está vinculada; senão a inicial do nome.
+  const initial = (n) => esc(String(n || '?').trim()[0] || '?').toUpperCase();
+  const avatarOf = (u, cls = '') => (u && u.discord && u.discord.avatar ? `<img class="avatar ${cls}" src="${esc(u.discord.avatar)}" alt="" width="40" height="40" referrerpolicy="no-referrer">` : `<span class="avatar ${cls}" aria-hidden="true">${initial(u && u.name)}</span>`);
+  const discordHandle = () => (S.user && S.user.discord ? S.user.discord.username : '');
   const nl = (href, icon, label, active, extra) => `<a class="nl${active ? ' on' : ''}" href="${href}"${active ? ' aria-current="page"' : ''}>${ico(icon)}<span>${label}</span>${extra || ''}</a>`;
   function updateChrome(name) {
     const tab = name === 'conta' ? (parseRoute().parts[1] || 'visao') : '';
@@ -130,7 +140,7 @@
     let h = '<div class="nav-label">Loja</div>' + nl('#/', 'home', 'Início', name === 'home');
     secs.forEach((s) => { h += nl(`#/${s}`, s, esc(secName(s)), name === s); });
     h += nl('#/portfolio', 'portfolio', 'Portfólio', name === 'portfolio') + nl('#/carrinho', 'cart', 'Carrinho', name === 'carrinho', n ? `<span class="pill">${n}</span>` : '');
-    h += '<div class="nav-label">Comunidade</div>' + nl('#/vouchs', 'star', 'Vouchs', name === 'vouchs') + nl('#/suporte', 'support', 'Suporte', name === 'suporte' || name === 'ticket') + nl('#/faq', 'faq', 'Perguntas frequentes', name === 'faq');
+    h += '<div class="nav-label">Comunidade</div>' + nl('#/vouchs', 'award', 'Vouchs', name === 'vouchs') + nl('#/suporte', 'support', 'Suporte', name === 'suporte' || name === 'ticket') + nl('#/faq', 'faq', 'Perguntas frequentes', name === 'faq');
     if (S.user) {
       h += '<div class="nav-label">Minha conta</div>';
       ACCT.filter(([id]) => id !== 'api' || WC().apiEnabled !== false).forEach(([id, label, icon]) => {
@@ -141,7 +151,7 @@
     }
     $('#nav').innerHTML = h;
     const su = $('#sideuser'); su.className = 'side-user' + (S.user ? '' : ' side-guest');
-    su.innerHTML = S.user ? `<span class="avatar" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span><div class="who"><b>${esc(S.user.name)}</b><small>${esc(S.user.email)}</small></div><a class="iconbtn" href="#/conta/perfil" title="Perfil" aria-label="Perfil">${ico('user')}</a><button class="iconbtn" data-act="logout" title="Sair" aria-label="Sair da conta">${ico('logout')}</button>`
+    su.innerHTML = S.user ? `${avatarOf(S.user)}<div class="who"><b>${esc(S.user.name)}</b><small>${esc(S.user.email)}</small></div><a class="iconbtn" href="#/conta/perfil" title="Perfil" aria-label="Perfil">${ico('user')}</a><button class="iconbtn" data-act="logout" title="Sair" aria-label="Sair da conta">${ico('logout')}</button>`
       : '<a class="btn" href="#/entrar">Entrar</a><a class="btn btn-ghost" href="#/cadastro">Criar conta</a>';
     $('#topact').innerHTML = (n ? `<a class="chip" href="#/carrinho" aria-label="Carrinho, ${n} ${n === 1 ? 'item' : 'itens'}">${ico('cart', 18)}<span class="cartn">${n}</span></a>` : '') +
       (S.user && walletOn ? `<a class="chip" href="#/conta/carteira" title="Saldo da carteira">${ico('wallet', 18)}<b>${brl(S.balance)}</b></a>` : '') + (S.user ? '' : '<a class="btn btn-small" href="#/entrar">Entrar</a>');
@@ -176,6 +186,15 @@
     if (out.mount) out.mount(app);
   }
   window.addEventListener('hashchange', render);
+  // Foto do Discord que não carregou: volta para a inicial do nome (a política de segurança não aceita onerror inline).
+  document.addEventListener('error', (e) => {
+    const im = e.target;
+    if (!im || im.tagName !== 'IMG' || !im.classList.contains('avatar')) return;
+    const sp = document.createElement('span');
+    sp.className = im.className; sp.setAttribute('aria-hidden', 'true');
+    sp.textContent = im.closest('.vouch') ? (($('.who b', im.closest('.vouch')) || {}).textContent || '?').trim()[0].toUpperCase() : ((S.user && S.user.name) || '?').trim()[0].toUpperCase();
+    im.replaceWith(sp);
+  }, true);
 
   document.addEventListener('click', async (e) => {
     const el = e.target.closest('[data-act]');
@@ -226,10 +245,15 @@
   views.vouchs = async () => {
     const { reviews } = await api('reviews/recent', { query: { n: 40 } }).catch(() => ({ reviews: [] }));
     const avg = reviews.length ? reviews.reduce((t, r) => t + r.rating, 0) / reviews.length : 0;
+    const dist = [5, 4].map((n) => [n, reviews.filter((r) => r.rating === n).length]);
+    const card = (r) => `<a class="vouch" href="#/produto/${esc(r.pid)}">
+      <div class="vouch-top">${r.avatar ? `<img class="avatar" src="${esc(r.avatar)}" alt="" width="40" height="40" loading="lazy" referrerpolicy="no-referrer">` : `<span class="avatar" aria-hidden="true">${initial(r.name)}</span>`}<div class="who"><b>${esc(r.name)}</b><span class="stars" aria-label="${r.rating} de 5 estrelas">${stars(r.rating)}</span></div><span class="vbadge" title="Avaliação de quem comprou este produto">${ico('award', 14)}Compra verificada</span></div>
+      <p>${esc(r.text)}</p><div class="vouch-foot"><span class="vprod">${esc(r.product)}</span><span class="when">${dt(r.at)}</span></div></a>`;
     return {
       title: 'Vouchs', html: `<div class="page"><header class="page-head"><h1>Vouchs</h1><p class="lead">Avaliações de clientes que já compraram (4 estrelas ou mais, com comentário).</p></header>
-        ${reviews.length ? `<div class="vouch-sum"><span class="chip"><strong>${reviews.length}</strong><span>vouchs recentes</span></span><span class="chip"><strong>${avg.toFixed(1)}</strong><span class="stars">${stars(avg)}</span></span></div>
-        <div class="vouches">${reviews.map((r) => `<a class="vouch" href="#/produto/${esc(r.pid)}"><span class="avatar" aria-hidden="true">${esc(String(r.name || '?').trim()[0].toUpperCase())}</span><div class="who"><b>${esc(r.name)}</b><small>${esc(r.product)}</small><span class="stars">${stars(r.rating)}</span><p>${esc(r.text)}</p></div><span class="when">${dt(r.at)}</span></a>`).join('')}</div>`
+        ${reviews.length ? `<div class="vouch-hero"><div class="vh-score"><strong>${avg.toFixed(1)}</strong><span class="stars">${stars(avg)}</span><small>${pl(reviews.length, 'vouch recente', 'vouchs recentes')}</small></div>
+        <div class="vh-bars">${dist.map(([n, c]) => `<div class="vh-row"><span>${n} ★</span><i><b style="width:${Math.round((c / reviews.length) * 100)}%"></b></i><em>${c}</em></div>`).join('')}</div></div>
+        <div class="vouches">${reviews.map(card).join('')}</div>`
         : empty('Ainda sem vouchs', 'As avaliações aparecem aqui depois das primeiras compras.', '<a class="btn" href="#/">Ver produtos</a>')}</div>`,
     };
   };
@@ -289,7 +313,7 @@
             <form id="buy" class="buy">
               <label>Quantidade<input type="number" name="qty" min="1" max="${max}" value="1" ${out ? 'disabled' : ''}></label>
               <label>Cupom<span class="inline"><input name="coupon" placeholder="Opcional" autocomplete="off" ${out ? 'disabled' : ''}><button type="button" class="btn btn-ghost btn-small" id="aplicar" ${out ? 'disabled' : ''}>Aplicar</button></span></label>
-              <label class="full">${p.delivery === 'manual' ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" ${p.delivery === 'manual' ? 'required' : ''} placeholder="${p.delivery === 'manual' ? 'Para combinarmos a entrega' : 'Discord ou WhatsApp'}" ${out ? 'disabled' : ''}></label>
+              <label class="full">${p.delivery === 'manual' ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" value="${esc(discordHandle())}" ${p.delivery === 'manual' ? 'required' : ''} placeholder="${p.delivery === 'manual' ? 'Para combinarmos a entrega' : 'Discord ou WhatsApp'}" ${out ? 'disabled' : ''}></label>
               <label class="full">CPF de quem vai pagar<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" ${p.price > 0 ? 'required' : ''} ${out ? 'disabled' : ''}></label>
               <div class="total full"><span>Total</span><strong id="total">${brl(p.price)}</strong></div>
               ${p.price > 0 ? payMethodHtml() : ''}
@@ -369,16 +393,17 @@
     const maxOf = (p) => Math.max(1, Math.min(p.maxPerOrder, p.stock.unlimited ? 99 : p.stock.count));
     return {
       title: 'Carrinho', html: `<div class="page"><header class="page-head"><h1>Carrinho</h1></header>
-        <div class="cols cartcols"><section class="section"><div class="cartlist">${live.map(({ it, p }) => `<div class="crow" data-pid="${esc(p.id)}">
+        <div class="cols cartcols"><section class="section"><div class="cartlist">${live.map(({ it, p }) => `<div class="crow" data-pid="${esc(p.id)}" style="--sec:${SEC_COLOR[p.section] || SEC_COLOR.outros}">
             <a class="cimg" href="#/produto/${esc(p.id)}">${p.image ? `<img src="${esc(safeUrl(p.image))}" alt="" loading="lazy">` : `<span>${esc(p.categoryName)}</span>`}</a>
-            <div class="cinfo"><a href="#/produto/${esc(p.id)}"><strong>${esc(p.name)}</strong></a><span class="muted">${esc(p.categoryName)} · ${brl(p.price)} cada${p.warrantyDays ? ` · garantia de ${p.warrantyDays}d` : ''}</span></div>
-            <input type="number" class="cqty" min="1" max="${maxOf(p)}" value="${Math.min(it.qty, maxOf(p))}" aria-label="Quantidade de ${esc(p.name)}">
-            <b class="cline">${brl(p.price * Math.min(it.qty, maxOf(p)))}</b><button type="button" class="btn btn-ghost btn-small" data-rm="${esc(p.id)}" aria-label="Remover ${esc(p.name)}">Remover</button></div>`).join('')}
+            <div class="cinfo"><a href="#/produto/${esc(p.id)}" class="cname">${esc(p.name)}</a><span class="cmeta"><span class="ctag">${esc(p.categoryName)}</span>${brl(p.price)} cada${p.warrantyDays ? ` · garantia de ${p.warrantyDays}d` : ''}</span></div>
+            <div class="cbuy"><div class="stepper"><button type="button" data-step="-1" aria-label="Diminuir quantidade de ${esc(p.name)}">−</button><input type="number" class="cqty" min="1" max="${maxOf(p)}" value="${Math.min(it.qty, maxOf(p))}" aria-label="Quantidade de ${esc(p.name)}"><button type="button" data-step="1" aria-label="Aumentar quantidade de ${esc(p.name)}">+</button></div>
+            <b class="cline">${brl(p.price * Math.min(it.qty, maxOf(p)))}</b></div>
+            <button type="button" class="iconbtn crm" data-rm="${esc(p.id)}" title="Remover" aria-label="Remover ${esc(p.name)}">${ico('trash', 18)}</button></div>`).join('')}
           ${gone.map(({ it, p }) => `<div class="crow gone"><div class="cinfo"><strong>${esc(p ? p.name : 'Produto indisponível')}</strong><span class="muted">${p ? 'Esgotado no momento.' : 'Este produto saiu da loja.'}</span></div><button type="button" class="btn btn-ghost btn-small" data-rm="${esc(it.pid)}">Remover</button></div>`).join('')}</div></section>
         <section class="section"><h2>Resumo</h2>${live.length ? `<form id="co" class="stack">
           <div class="sum"><span>Subtotal</span><b id="sub">${brl(0)}</b></div><div class="sum" id="dsc" hidden><span>Cupom</span><b></b></div><div class="sum total"><span>Total</span><b id="tot">${brl(0)}</b></div>
           <label>Cupom<span class="inline"><input name="coupon" placeholder="Opcional" autocomplete="off"><button type="button" class="btn btn-ghost btn-small" id="aplicar">Aplicar</button></span></label>
-          <label>${hasManual ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" ${hasManual ? 'required' : ''} placeholder="${hasManual ? 'Para combinarmos as entregas manuais' : 'Discord ou WhatsApp'}"></label>
+          <label>${hasManual ? 'Seu usuário no Discord ou WhatsApp' : 'Contato (opcional)'}<input name="contact" maxlength="80" value="${esc(discordHandle())}" ${hasManual ? 'required' : ''} placeholder="${hasManual ? 'Para combinarmos as entregas manuais' : 'Discord ou WhatsApp'}"></label>
           <label>CPF de quem vai pagar<input name="cpf" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" required></label>
           ${payMethodHtml()}
           <label class="check terms"><input type="checkbox" name="terms" required> <span>Li e aceito os <a href="#/termos" target="_blank">Termos de uso</a> e a <a href="#/reembolso" target="_blank">política de reembolso e garantia</a>.</span></label>
@@ -393,6 +418,7 @@
           if ($('#sub', el)) { $('#sub', el).textContent = brl(sub); curTotal = Math.max(0, sub - discount); $('#tot', el).textContent = brl(curTotal); upd(); const d = $('#dsc', el); d.hidden = !discount; $('b', d).textContent = `-${brl(discount)}`; }
         };
         live.forEach((r) => { $('.cqty', r.el).addEventListener('input', () => { const q = qtyOf(r); cart.setQty(r.p.id, q); $('.cline', r.el).textContent = brl(r.p.price * q); discount = 0; sum(); updateChrome('carrinho'); }); });
+        $$('[data-step]', el).forEach((b) => b.onclick = () => { const i = $('.cqty', b.closest('.crow')); i.value = Math.max(+i.min, Math.min(+i.max, (parseInt(i.value, 10) || 1) + +b.dataset.step)); i.dispatchEvent(new Event('input')); });
         $$('[data-rm]', el).forEach((b) => b.onclick = () => { cart.remove(b.dataset.rm); render(); });
         $('#limpar', el).onclick = () => { cart.clear(); render(); };
         const f = $('#co', el); if (!f) return;
@@ -580,7 +606,7 @@
   }
 
   const acctTabs = {};
-  const ACCT = [['visao', 'Visão geral', 'overview'], ['carteira', 'Carteira', 'wallet'], ['pedidos', 'Pedidos', 'orders'], ['favoritos', 'Favoritos', 'heart'], ['seguranca', 'Segurança', 'shield'], ['api', 'Chaves de API', 'key'], ['perfil', 'Perfil', 'user']];
+  const ACCT = [['visao', 'Visão geral', 'overview'], ['carteira', 'Carteira', 'wallet'], ['pedidos', 'Pedidos', 'orders'], ['favoritos', 'Favoritos', 'heart'], ['seguranca', 'Segurança', 'lock'], ['api', 'Chaves de API', 'key'], ['perfil', 'Perfil', 'user']];
   views.conta = async ([tab = 'visao'], q) => {
     if (!S.user) return needLogin();
     if (!acctTabs[tab]) tab = 'visao';
@@ -637,7 +663,21 @@
   };
   const TIERS = [[500000, 'Diamante'], [100000, 'Ouro'], [20000, 'Prata'], [1, 'Bronze']];   // total gasto, em centavos
   const emblem = (icon, title, desc, ok) => `<div class="emb${ok ? '' : ' lock'}" title="${esc(desc)}"><span class="ico">${ico(icon, 26)}</span><b>${esc(title)}</b><small>${esc(desc)}</small></div>`;
-  acctTabs.perfil = async (el) => {
+  const DISCORD_MSG = { ok: ['Discord vinculado à sua conta.', 'ok'], negado: ['Você cancelou a vinculação no Discord.', 'err'], expirado: ['O pedido de vinculação expirou. Tente de novo.', 'err'], erro: ['O Discord não confirmou a conta. Tente de novo.', 'err'], 'em-uso': ['Essa conta do Discord já está vinculada a outra conta da loja.', 'err'], indisponivel: ['A vinculação com o Discord ainda não foi configurada na loja.', 'err'] };
+  const discordPanel = () => {
+    const d = S.user.discord;
+    if (d) return `<section class="panel dc-panel"><div class="dc-head"><h3>${ico('discord', 20)} Discord</h3><span class="st-ok-badge">vinculado</span></div>
+      <div class="dc-card">${avatarOf(S.user, 'lg2')}<div class="dc-who"><b>${esc(d.name)}</b><span>@${esc(d.username)}</span><small>ID ${esc(d.id)} · vinculado em ${dt(d.linkedAt).slice(0, 8)}</small></div></div>
+      <p class="fine">Sua foto e seu nome do Discord aparecem na sua conta, e seu usuário já vem preenchido nos pedidos. Só lemos seu perfil público: nada de servidores, mensagens ou e-mail.</p>
+      <div class="actions"><a class="btn btn-ghost btn-small" href="/api/store?r=discord/start">${ico('link', 16)} Atualizar foto e nome</a><button type="button" class="btn btn-danger btn-small" id="dc-off">Desvincular</button></div></section>`;
+    if (S.discordLink) return `<section class="panel dc-panel"><div class="dc-head"><h3>${ico('discord', 20)} Discord</h3></div>
+      <p class="muted">Vincule o seu Discord para mostrar sua foto e seu nome na conta e agilizar as entregas.</p>
+      <p class="fine">Você entra no Discord, autoriza só a leitura do perfil e volta para cá. Não pedimos acesso a servidores, mensagens nem e-mail.</p>
+      <div class="actions"><a class="btn btn-discord" href="/api/store?r=discord/start">${ico('discord', 18)} Vincular Discord</a></div></section>`;
+    return S.user.role === 'admin' ? `<section class="panel dc-panel"><div class="dc-head"><h3>${ico('discord', 20)} Discord</h3></div><p class="muted">A vinculação ainda não está ativa. Crie o app em discord.com/developers e configure <code>DISCORD_CLIENT_ID</code> e <code>DISCORD_CLIENT_SECRET</code> na Vercel (passo a passo no LOJA.md). Só você, admin, vê este aviso.</p></section>` : '';
+  };
+  acctTabs.perfil = async (el, reload, q) => {
+  if (q && q.discord) { const m = DISCORD_MSG[q.discord]; if (m) toast(m[0], m[1]); delete q.discord; history.replaceState(null, '', '#/conta/perfil'); }
     const [{ orders }, w, wl] = await Promise.all([api('orders'), api('wallet').catch(() => null), api('wishlist').catch(() => ({ products: [] }))]);
     const paid = orders.filter((o) => o.status === 'pago' || o.status === 'entregue');
     const total = paid.reduce((t, o) => t + o.total, 0), big = paid.reduce((m, o) => Math.max(m, o.total), 0);
@@ -650,12 +690,15 @@
     ];
     if (S.user.twofa) emb.push(['shield', 'Conta protegida', 'Verificação em duas etapas ativa', true]);
     const got = emb.filter((e) => e[3]).length;
-    el.innerHTML = `<div class="pf"><div class="pf-banner"></div><div class="pf-id"><span class="avatar lg" aria-hidden="true">${esc(S.user.name.trim()[0].toUpperCase())}</span>
-        <h1 class="pf-name">${esc(S.user.name)}</h1><span class="pf-tier">${tier ? `${ico('star', 18)} Cliente ${tier}` : 'Cliente novo'}</span><span class="pf-mail">${esc(S.user.email)}</span></div>
+    el.innerHTML = `<div class="pf"><div class="pf-banner"></div><div class="pf-id">${avatarOf(S.user, 'lg')}
+        <h1 class="pf-name">${esc(S.user.name)}</h1><span class="pf-tier">${tier ? `${ico('star', 18)} Cliente ${tier}` : 'Cliente novo'}</span><span class="pf-mail">${esc(S.user.email)}</span>${S.user.discord ? `<span class="pf-dc">${ico('discord', 14)} @${esc(S.user.discord.username)}</span>` : ''}</div>
       <div class="pf-stats"><div class="pf-stat"><span>Total gasto</span><strong>${brl(total)}</strong></div><div class="pf-stat"><span>Pedidos</span><strong>${paid.length}</strong></div><div class="pf-stat"><span>Maior compra</span><strong>${brl(big)}</strong></div>
         <div class="pf-stat hl"><span>Saldo da carteira</span><strong>${brl(S.balance)}</strong></div><div class="pf-stat"><span>Em andamento</span><strong>${open}</strong></div><div class="pf-stat"><span>Favoritos</span><strong>${wl.products.length}</strong></div></div></div>
+      ${discordPanel()}
       <section class="panel"><div class="emb-head"><h3>Emblemas</h3><span><b>${got}</b>/${emb.length} desbloqueados</span></div><div class="emblems">${emb.map((e) => emblem(e[0], e[1], e[2], e[3])).join('')}</div></section>
       <section class="panel"><h3>Dados da conta</h3><form id="perfil" class="stack"><label>Nome<input name="name" value="${esc(S.user.name)}" required maxlength="60"></label><label>E-mail<input value="${esc(S.user.email)}" disabled></label><p class="fine">O e-mail é o endereço que outras pessoas usam para te enviar saldo. Para trocar, fale com o suporte.</p><div class="actions"><button class="btn">Salvar nome</button></div></form></section>`;
+    const off = $('#dc-off', el);
+    if (off) off.onclick = async () => { if (await confirmBox('Desvincular o Discord?', 'Sua foto e seu nome do Discord saem da conta. Você pode vincular de novo quando quiser.', { danger: true, ok: 'Desvincular' })) run(off, async () => { S.user = (await post('account/discord/unlink')).user; updateChrome('conta'); toast('Discord desvinculado.'); render(); }); };
     $('#perfil', el).onsubmit = (e) => { e.preventDefault(); run($('button', e.target), async () => { S.user = (await post('account', { name: e.target.name.value })).user; updateChrome('conta'); toast('Nome atualizado.'); render(); }); };
   };
   acctTabs.seguranca = async (el) => {
