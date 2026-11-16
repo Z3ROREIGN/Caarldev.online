@@ -18,7 +18,8 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
     if (hdrs) hdrs.headers.forEach((h) => res.setHeader(h.key, h.value));
     const v1 = /^\/api\/v1\/([\w/-]+)$/.exec(u.pathname);          // API pública da carteira (rewrite do vercel.json)
     if (v1) req.url = `/api/store?r=v1/${v1[1]}${u.search ? '&' + u.search.slice(1) : ''}`;
-    if (u.pathname === '/api/store' || v1) {
+    if (u.pathname === '/api/discord/callback') req.url = `/api/store?r=discord/callback${u.search ? '&' + u.search.slice(1) : ''}`;   // rewrite do vercel.json
+    if (u.pathname === '/api/store' || u.pathname === '/api/discord/callback' || v1) {
       let raw = ''; req.on('data', (c) => { raw += c; });
       req.on('end', () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } req.headers['x-forwarded-proto'] = 'http'; store(req, res); });
       return;
