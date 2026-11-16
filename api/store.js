@@ -9,6 +9,7 @@ const T = require('../lib/support');
 const B = require('../lib/backup');
 const W = require('../lib/wallet');
 const TOTP = require('../lib/totp');
+const D = require('../lib/discord');
 const { resolvePages, DEFAULT_PAGES } = require('../lib/pages');
 const { notify } = require('../lib/notify');
 const { HttpError, fail, str, int, bool, now, brl, cleanEmail, isEmail, csvCell, url: cleanUrl } = require('../lib/util');
@@ -49,6 +50,7 @@ R('GET', 'bootstrap', 'public', async (c) => {
     config: S.publicCfg(cfg), categories: cats.filter((x) => x.active),
     wishBack: c.user ? await V.wlBack(c.user) : 0,       // favoritos que voltaram ao estoque
     balance: c.user ? await W.balance(c.user.id) : 0,    // saldo da carteira (centavos)
+    discordLink: D.enabled(),                            // o botão "Vincular Discord" só aparece se o app do Discord estiver configurado
   };
 });
 R('GET', 'products', 'public', async (c) => {
@@ -165,6 +167,38 @@ R('POST', 'account', 'user', async (c) => {
   }
   await S.setJ(S.K.user(u.id), u);
   A.setSession(c.req, c.res, u);
+  return { user: S.publicUser(u) };
+});
+// Vincular o Discord. start leva para o Discord; callback volta com ?code e grava id, nome e foto na conta.
+const toProfile = (m) => ({ redirect: `/#/conta/perfil?discord=${m}` });
+R('GET', 'discord/start', 'public', async (c) => {
+  if (!c.user) return { redirect: `/#/entrar?next=${encodeURIComponent('#/conta/perfil')}` };
+  if (!D.enabled()) return toProfile('indisponivel');
+  await A.limit(`dcs:${c.user.id}`, 15, 900);
+  return { redirect: await D.begin(c.user, c.req) };
+});
+R('GET', 'discord/callback', 'public', async (c) => {
+  if (!c.user) return { redirect: `/#/entrar?next=${encodeURIComponent('#/conta/perfil')}` };
+  if (!D.enabled()) return toProfile('indisponivel');
+  await A.limit(`dcb:${c.user.id}`, 20, 900);
+  const st = await D.takeState(c.q.state, c.user.id);
+  if (!st) return toProfile('expirado');
+  if (c.q.error || !c.q.code) return toProfile('negado');
+  const d = await D.fetchProfile(c.q.code, st.ru);
+  if (!d) return toProfile('erro');
+  if (!(await D.claim(d.id, c.user.id))) return toProfile('em-uso');
+  const u = await S.getJ(S.K.user(c.user.id));
+  if (u.discord && u.discord.id !== d.id) await D.release(u.discord.id, u.id);
+  u.discord = d;
+  await S.setJ(S.K.user(u.id), u);
+  return toProfile('ok');
+});
+R('POST', 'account/discord/unlink', 'user', async (c) => {
+  const u = c.user;
+  if (!u.discord) return { user: S.publicUser(u) };
+  await D.release(u.discord.id, u.id);
+  delete u.discord;
+  await S.setJ(S.K.user(u.id), u);
   return { user: S.publicUser(u) };
 });
 // Verificação em duas etapas. 1) setup gera a chave; 2) enable confirma com um código e devolve os códigos de recuperação (só aparecem uma vez).

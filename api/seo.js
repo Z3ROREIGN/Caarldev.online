@@ -29,6 +29,9 @@ function shell({ base, path, title, desc, image, type = 'website', jsonld, body 
 <meta name="theme-color" content="#1a0907">
 ${noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${esc(base + path)}">`}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="${type}">
 <meta property="og:site_name" content="Caarldev">
 <meta property="og:title" content="${esc(title)}">
